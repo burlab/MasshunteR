@@ -20,13 +20,15 @@
 ###################################################################################################################
 
 
-setwd("D:/Bo/Data/RawData/LCMS/GL08D_StabilityTests")
+#setwd("D:/Bo/Data/RawData/LCMS/GL08D_StabilityTests")
+setwd("D://Adithya//Sample data")
 
 library(tidyr)
 library(dplyr)
 library(ggplot2)
 library(data.table)
 library(RColorBrewer)
+library(lubridate)
 
 ###################################################################################################################
 # Import Agilent MassHunter Quant Export file (CSV) and convert to long (tidy) data format
@@ -67,6 +69,7 @@ numCol <- c("RT","Area","Height", "FWHM")
 dat[, names(dat) %in% numCol] <- lapply(dat[,names(dat) %in% numCol], as.numeric)
 factCol <- c("QuantWarning","SampleName","SampleFileName","SampleTypeMethod", "Compound")
 dat[, names(dat) %in% factCol] <- lapply(dat[,names(dat) %in% factCol], as.factor)
+dat$AcqTime <- mdy_hm(dat$AcqTime) #converts to dateacquired to a date variable (instead of character) using lubridate
 
 ###################################################################################################################
 # ISTD normalization and calculation of absolute levels
@@ -76,25 +79,34 @@ dat[, names(dat) %in% factCol] <- lapply(dat[,names(dat) %in% factCol], as.facto
 dat <- dat %>% 
   mutate(SampleType=factor(ifelse(grepl("PQC", SampleName), "PQC", ifelse(grepl("TQC", SampleName), "TQC", ifelse(grepl("BLANK", SampleName), "BLANK", "Sample"))))) 
 
-# Normalize with corresponding ISTD, according to external data file (compound-ISTD mapping file)
+# add the ISTD data to the dataset
+dat <- dat  %>% group_by(SampleFileName) %>% mutate(ISTD = sapply(Compound,function(y) mapISTD[which(y == mapISTD$Compound),2])) # DOES NOT WORK YET
+# subsets the dataset to only include information about the ISTDs
+istdArea <- filter(dat,Compound==ISTD) %>% select(SampleFileName,Compound,AcqTime,Area)
+ungroup(istdArea)
 
-#dat1 <- dat %>% group_by(SampleFileName) %>% mutate(NormArea = Compound)
-dat1 <- dat  %>% group_by(SampleFileName) %>% mutate(ISTD = sapply(Compound,function(y) mapISTD[which(y == mapISTD$Compound),2])) # DOES NOT WORK YET
+# Function to find the most recent ISTD --> still needs work
+#closestTime <- function(dataTime){
+#  closest <- max(istdArea[istdArea$AcqTime<=dataTime])
+#  return(which(istd[closest]))
+#}
 
+# Normalises the data and adds the result to a new column
+dat1 <- mutate(dat1, normArea = Area/istdArea[istdArea$Compound==Compound]$Area)
 
 
 
 # Pre-processing of data: remove not interesting columns, rename other columns and backup sample name
 dat <- dat[, !(colnames(dat) %in% c("Peptide.Sequence","Precursor.Charge","Product.Charge","Fragment.Ion"))]
-setnames(dat, old=c("Protein.Name","Replicate.Name", "Precursor.Mz", "Product.Mz", "Peak.Rank" ), new=c("LipidName", "SampleName", "PrecursorMz", "ProductMz", "Peak.Rank"))
-dat$SampleNameOriginal=dat$SampleName
+#setnames(dat, old=c("Protein.Name","Replicate.Name", "Precursor.Mz", "Product.Mz", "Peak.Rank" ), new=c("LipidName", "SampleName", "PrecursorMz", "ProductMz", "Peak.Rank"))
+#dat$SampleNameOriginal=dat$SampleName
 
 # Guess sample type of all runs
 dat <- dat %>% 
   mutate(SampleType=ifelse(grepl("QC", SampleName), "QC", ifelse(grepl("BLK", SampleName), "BLANK", "Sample")))
 
 # Normalize with IS
-dat <- dat %>% mutate(NormArea = Area/subset(Area, LipidName=="13C2D2_S1P")) 
+#dat <- dat %>% mutate(NormArea = Area/subset(Area, LipidName=="13C2D2_S1P")) 
 
 # Calculate concentrations based on spiked of ISTD (CUSTOMIZE to your data)
 ISTD_CONC = 20 # ng/mL
