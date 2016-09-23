@@ -85,10 +85,10 @@ dat <- dat %>% mutate(ISTD = sapply(Compound,function(y) mapISTD[which(y == mapI
 # com is the column name (use Area.X) and row is each row(timestamp)
 normalise <- function(row){
   compo <- row[["Compound"]]
-  time <- row[["AcqTime"]]
+  fileName <- row[["SampleFileName"]]
   compo <- gsub("^.*\\.","",compo) # Extracts the name of the compound to reference from setnames
   istd <- mapISTD[which(mapISTD$Compound==compo),2] # Finds the relevant ISTD
-  row <- filter(datWide,AcqTime==time)
+  row <- filter(datWide,SampleFileName==fileName)
   # Finds the areas of the compound and the istd before calculating the normalised area
   compArea <- as.numeric(select(row,contains(paste("Area",compo,sep=".")))[,1])
   istdArea <- as.numeric(select(row,contains(paste("Area",istd,sep=".")))[,1])
