@@ -28,7 +28,6 @@ library(dplyr)
 library(ggplot2)
 library(data.table)
 library(RColorBrewer)
-library(lubridate)
 
 ###################################################################################################################
 # Import Agilent MassHunter Quant Export file (CSV) and convert to long (tidy) data format
@@ -69,7 +68,6 @@ numCol <- c("RT","Area","Height", "FWHM")
 dat[, names(dat) %in% numCol] <- lapply(dat[,names(dat) %in% numCol], as.numeric)
 factCol <- c("QuantWarning","SampleName","SampleFileName","SampleTypeMethod", "Compound")
 dat[, names(dat) %in% factCol] <- lapply(dat[,names(dat) %in% factCol], as.factor)
-dat$AcqTime <- mdy_hm(dat$AcqTime) #converts to dateacquired to a date variable (instead of character) using lubridate
 
 ###################################################################################################################
 # ISTD normalization and calculation of absolute levels
@@ -80,19 +78,32 @@ dat <- dat %>%
   mutate(SampleType=factor(ifelse(grepl("PQC", SampleName), "PQC", ifelse(grepl("TQC", SampleName), "TQC", ifelse(grepl("BLANK", SampleName), "BLANK", "Sample"))))) 
 
 # add the ISTD data to the dataset
-dat <- dat  %>% group_by(SampleFileName) %>% mutate(ISTD = sapply(Compound,function(y) mapISTD[which(y == mapISTD$Compound),2])) # DOES NOT WORK YET
+dat <- dat %>% mutate(ISTD = sapply(Compound,function(y) mapISTD[which(y == mapISTD$Compound),2])) # DOES NOT WORK YET
 # subsets the dataset to only include information about the ISTDs
-istdArea <- filter(dat,Compound==ISTD) %>% select(SampleFileName,Compound,AcqTime,Area)
-ungroup(istdArea)
 
-# Function to find the most recent ISTD --> still needs work
-#closestTime <- function(dataTime){
-#  closest <- max(istdArea[istdArea$AcqTime<=dataTime])
-#  return(which(istd[closest]))
-#}
+# Function which takes a compound and returns it's normalised area
+# com is the column name (use Area.X) and row is each row(timestamp)
+normalise <- function(row){
+  compo <- row[["Compound"]]
+  time <- row[["AcqTime"]]
+  compo <- gsub("^.*\\.","",compo) # Extracts the name of the compound to reference from setnames
+  istd <- mapISTD[which(mapISTD$Compound==compo),2] # Finds the relevant ISTD
+  row <- filter(datWide,AcqTime==time)
+  # Finds the areas of the compound and the istd before calculating the normalised area
+  compArea <- as.numeric(select(row,contains(paste("Area",compo,sep=".")))[,1])
+  istdArea <- as.numeric(select(row,contains(paste("Area",istd,sep=".")))[,1])
+  normalisedArea <- compArea/istdArea
+  normalisedArea
+}
 
+# Vectors containing all the compounds and times
+compoundList <- unique(dat$Compound)
+timeList <- unique(dat$AcqTime)
 # Normalises the data and adds the result to a new column
-dat1 <- mutate(dat1, normArea = Area/istdArea[istdArea$Compound==Compound]$Area)
+dat1 <- mutate(dat, normArea = apply(dat,1,normalise))
+
+# Groups the data for later processing
+dat <- dat %>% group_by(SampleFileName)
 
 
 
