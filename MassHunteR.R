@@ -148,9 +148,9 @@ datSamples <- dat %>% filter(SampleType =="Sample") %>%
   separate(col = SampleName, into = expGrp, convert=TRUE, remove=FALSE, sep ="-")
 
 # necessary? (can this be made flexible, in case there are more factors, e.g. using col indices?)   
-datSamples$FactorA = as.factor(pdat$FactorA)
-datSamples$FactorB <- as.factor(pdat$FactorB)
-datSamples$FactorC <- as.factor(pdat$FactorC)
+datSamples$FactorA = as.factor(dat$FactorA)
+datSamples$FactorB <- as.factor(dat$FactorB)
+datSamples$FactorC <- as.factor(dat$FactorC)
 
 # Basic statistics: mean +/- SD, t Test...
 # ------------------------------------------
