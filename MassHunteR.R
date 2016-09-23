@@ -20,7 +20,7 @@
 ###################################################################################################################
 
 
-setwd("D:/Bo/Data/RawData/LCMS/GL08D_StabilityTests")
+setwd("D:/Bo/Data/RawData/LCMS/ExperimentA")
 
 library(tidyr)
 library(dplyr)
@@ -69,7 +69,7 @@ factCol <- c("QuantWarning","SampleName","SampleFileName","SampleTypeMethod", "C
 dat[, names(dat) %in% factCol] <- lapply(dat[,names(dat) %in% factCol], as.factor)
 
 ###################################################################################################################
-# ISTD normalization and calculation of absolute levels
+# ISTD normalization and calculation of absolute concentrations
 ###################################################################################################################
 
 # Try to guess sample type based on sample file name
@@ -79,24 +79,16 @@ dat <- dat %>%
 # Normalize with corresponding ISTD, according to external data file (compound-ISTD mapping file)
 
 #dat1 <- dat %>% group_by(SampleFileName) %>% mutate(NormArea = Compound)
-dat1 <- dat  %>% group_by(SampleFileName) %>% mutate(ISTD = sapply(Compound,function(y) mapISTD[which(y == mapISTD$Compound),2])) # DOES NOT WORK YET
+dat <- dat  %>% group_by(SampleFileName) %>% mutate(ISTD = sapply(Compound,function(y) mapISTD[which(y == mapISTD$Compound),2])) # DOES NOT WORK YET
+dat <- dat %>% mutate(NormArea = Area/ISTD) 
 
-
-
-
-# Pre-processing of data: remove not interesting columns, rename other columns and backup sample name
-dat <- dat[, !(colnames(dat) %in% c("Peptide.Sequence","Precursor.Charge","Product.Charge","Fragment.Ion"))]
-setnames(dat, old=c("Protein.Name","Replicate.Name", "Precursor.Mz", "Product.Mz", "Peak.Rank" ), new=c("LipidName", "SampleName", "PrecursorMz", "ProductMz", "Peak.Rank"))
-dat$SampleNameOriginal=dat$SampleName
-
-# Guess sample type of all runs
+# Write sample type (guessed based on sample name) of all samples into an additional column
 dat <- dat %>% 
   mutate(SampleType=ifelse(grepl("QC", SampleName), "QC", ifelse(grepl("BLK", SampleName), "BLANK", "Sample")))
 
-# Normalize with IS
-dat <- dat %>% mutate(NormArea = Area/subset(Area, LipidName=="13C2D2_S1P")) 
 
-# Calculate concentrations based on spiked of ISTD (CUSTOMIZE to your data)
+# Calculate concentrations based on spiked of ISTD (CUSTOMIZE to your data)...
+# ToDo: Transfer these info to seperate input files
 ISTD_CONC = 20 # ng/mL
 ISTD_MW = 383.47 # g mol-1
 ISTD_VOL = 50 # uL
@@ -105,27 +97,51 @@ dat <- dat %>%
   mutate(uM = (NormArea   * (ISTD_VOL/1000 * ISTD_CONC/ISTD_MW*1000) / SAMPLE_VOL * 1000)/1000) %>%  
   mutate(ngml = (NormArea   * (ISTD_VOL/1000 * ISTD_CONC) / SAMPLE_VOL * 1000))
 
-########################
-# Sample Statistics
-########################
-# CUSTOMIZE: Format sample names so that sample names can be split into distinct information
-
-# Code below are just copy/past from other scripts that were use to analyse specific data set...:
-
-# Split sample names to new fields: Name, Replicate, VOlume and SampleType. Sort by Volume and SampleName
-dat$SampleName = gsub("_", "-", dat$SampleName)
-datSamples <- dat %>% filter(SampleType =="Sample") %>%
-  separate(col = SampleName, into =  c("Injection", "Treatment", "Group", "AnimalID"), convert=TRUE, remove=TRUE, sep ="-")
 
 
-#Plot Lipid concentration vs AnimalID, once panel/facet for each lipid 
+###############################
+# Basic Statistics and Plots
+###############################
 
-pdat = datSamples %>%filter(Treatment =="Pred") %>%filter(ProductMz ==60.08) %>%filter(LipidName !="13C2D2_S1P")
-pdat$Group = as.factor(gsub("d", "", pdat$Group))
-pdat$AnimalID <- as.factor(pdat$AnimalID)
+# Estimate experimental groups, factors etc
+# ------------------------------------------
+# Extract groups/factors from sample names to new fields: 
+# e.g. Plasma_Control_Female, Plasma_TreatmentA_Female...
+# Alternatively: yet another input table containing sample information
 
-ggplot(data=pdat, mapping=aes(x = Group, y = uM, group=AnimalID, color = AnimalID)) +
-  ggtitle("Ttreatment") +
+# Assuming 3 factors... (can this be made flexible, assuming all samples names are consistent?)
+expGrp = c("FactorA", "FactorB", "FactorC")
+
+datSamples <- dat %>% filter(SampleType =="Sample") %>% 
+  separate(col = SampleName, into = expGrp, convert=TRUE, remove=FALSE, sep ="-")
+
+# necessary? (can this be made flexible, in case there are more factors, e.g. using col indices?)   
+datSamples$FactorA = as.factor(pdat$FactorA)
+datSamples$FactorB <- as.factor(pdat$FactorB)
+datSamples$FactorC <- as.factor(pdat$FactorC)
+
+# Filter for specific FactorA values
+filterFactorA = c("Control", "TreatmentA")
+datSelected = datSamples %>%filter(FactorA %in% filterFactorA)
+
+#### Work in progress....
+    # Calculate average and SD of all replicates
+    datSelected <- datSelected %>% group_by(LipidName, FactorB) %>% 
+      summarise(meanArea=mean(Area), SDarea = sd(Area), meanuM=mean(uM), SDuM = sd(uM))
+    
+    # Calculate t tests...  
+    # ! Don't think this works yet...  
+    meanNormArea <- datSelected %>% group_by(LipidName, FactorB) %>% 
+      summarise_each(funs(t.test(.[vs == 0], .[vs == 1])$p.value), vars = disp:qsec)
+#### ......
+
+# --------------------------------
+# Plots
+# --------------------------------
+# Plot concentrations vs FactorA for each compound, different line and colored according to FactorC (one compound per panel) 
+
+ggplot(data=pdat, mapping=aes(x = FactorB, y = uM, group=FactorC, color = FactorC)) +
+  ggtitle("Treatment") +
   geom_point(size = 3) +
   geom_line(size=0.8)  +
   scale_colour_brewer(palette = "Set1") +
@@ -143,52 +159,24 @@ ggplot(data=pdat, mapping=aes(x = Group, y = uM, group=AnimalID, color = AnimalI
         plot.title = element_text(size=16, lineheight=2, face="bold", margin=margin(b = 20, unit = "pt"))) +
   annotate("text", x = 1.5, y = 1, label = "Some text") +
 
-  
-# t tests...  
-meanNormArea <- dat_AllCalc %>% group_by(LipidName, Thrombin ,Time, ProductMz) %>% 
-summarise_each(funs(t.test(.[vs == 0], .[vs == 1])$p.value), vars = disp:qsec)
 
-# Summarize mean and SD of all replicates
-meanNormArea <- dat_AllCalc %>% group_by(LipidName, Thrombin ,Time, ProductMz) %>% 
-  summarise(meanArea=mean(Area), SDarea = sd(Area), meanConc=mean(normalizedfmol), SDfmol = sd(normalizedfmol))
-
-# Filter out ISTD and show only quantifier transition                                                                                       
-pdat <- meanNormArea %>% filter(ProductMz==60.08) %>% filter(LipidName!="13C2D2_S1P")
-pdatIS <- meanNormArea %>% filter(ProductMz==60.08) %>% filter(LipidName=="13C2D2_S1P")
-
-#Plot Levels vs Number of Cells 
-ggplot(data=pdat, mapping=aes(x = Time, y = meanConc, color= factor(Thrombin))) +
-  ggtitle("Effect of Thrombin on S1P levels of isolated Platelets (CTAD method)") +
-  geom_point(size = 3) +
-  geom_line(size=0.7)  +
-  theme_grey(base_size = 10) +
-  facet_wrap(~LipidName, scales="free") +
-  aes(ymin=0) +
-  geom_errorbar(aes(ymax = meanConc + SDfmol, ymin=meanConc - SDfmol), width=1)  +
-  #geom_smooth(method='lm', se = FALSE, level=0.95)
-  xlab("Incubation time in presence of compound X [min]") +
-  ylab("fmol / 10^9 platelets") + 
-  scale_color_discrete(name = "compound X", labels = c("Control (0 uM)", "20 uM", "40 uM")) +
-  theme(axis.text=element_text(size=9), axis.title=element_text(size=12,face="bold"), 
-        strip.text = element_text(size=10, face="bold"),
-        legend.title=element_text(size=10, face="bold"),
-        #legend.position=c(0.89,0.1),
-        plot.title = element_text(size=16, lineheight=2, face="bold", margin=margin(b = 20, unit = "pt")))
+# #Plot Levels vs Number of Cells 
+# ggplot(data=pdat, mapping=aes(x = Time, y = meanConc, color= factor(Thrombin))) +
+#   ggtitle("Effect of Thrombin on S1P levels of isolated Platelets (CTAD method)") +
+#   geom_point(size = 3) +
+#   geom_line(size=0.7)  +
+#   theme_grey(base_size = 10) +
+#   facet_wrap(~LipidName, scales="free") +
+#   aes(ymin=0) +
+#   geom_errorbar(aes(ymax = meanConc + SDfmol, ymin=meanConc - SDfmol), width=1)  +
+#   #geom_smooth(method='lm', se = FALSE, level=0.95)
+#   xlab("Incubation time in presence of compound X [min]") +
+#   ylab("fmol / 10^9 platelets") + 
+#   scale_color_discrete(name = "compound X", labels = c("Control (0 uM)", "20 uM", "40 uM")) +
+#   theme(axis.text=element_text(size=9), axis.title=element_text(size=12,face="bold"), 
+#         strip.text = element_text(size=10, face="bold"),
+#         legend.title=element_text(size=10, face="bold"),
+#         #legend.position=c(0.89,0.1),
+#         plot.title = element_text(size=16, lineheight=2, face="bold", margin=margin(b = 20, unit = "pt")))
 
 
-#Plot Levels vs Extract derivatized
-
-ggplot(data=pdat, mapping=aes(x = VolDeriv, y =meanConc, color= factor(CellCount))) +
-  geom_point() +
-  geom_line()  +
-  theme_grey(base_size = 10) +
-  facet_wrap(~LipidName, scales="free") +
-  aes(ymin=0) +
-  geom_errorbar(aes(ymax = meanConc + SDfmol, ymin=meanConc - SDfmol), width=1)  +
-  #geom_smooth(method='lm', se = FALSE, level=0.95)
-  xlab("Derivatized with 20ul reagent Z") +
-  ylab("fmol / 10^9 cells") + 
-  scale_color_discrete(name = "cells extracted in 250uL methanol", labels = c("50 mio", "100 mio", "150 mio", "200 mio", "250 mio", "300 mio")) +
-  theme(axis.text=element_text(size=9), axis.title=element_text(size=12,face="bold"), 
-        strip.text = element_text(size=10, face="bold"),
-        legend.title=element_text(size=10, face="bold"))
