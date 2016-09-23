@@ -120,21 +120,26 @@ datSamples$FactorA = as.factor(pdat$FactorA)
 datSamples$FactorB <- as.factor(pdat$FactorB)
 datSamples$FactorC <- as.factor(pdat$FactorC)
 
-# Filter for specific FactorA values
-filterFactorA = c("Control", "TreatmentA")
-datSelected = datSamples %>%filter(FactorA %in% filterFactorA)
+# Basic statistics: mean +/- SD, t Test...
+# ------------------------------------------
 
 #### Work in progress....
     # Calculate average and SD of all replicates
-    datSelected <- datSelected %>% group_by(LipidName, FactorB) %>% 
+    datSelected <- datSelected %>% group_by(LipidName, FactorA, FactorB) %>% 
       summarise(meanArea=mean(Area), SDarea = sd(Area), meanuM=mean(uM), SDuM = sd(uM))
     
     # Calculate t tests...  
     # ! Don't think this works yet...  
+    
+    # Filter for specific FactorA values
+    filterFactorA = c("Control", "TreatmentA")
+    datSelected = datSamples %>%filter(FactorA %in% filterFactorA)
+
     meanNormArea <- datSelected %>% group_by(LipidName, FactorB) %>% 
       summarise_each(funs(t.test(.[vs == 0], .[vs == 1])$p.value), vars = disp:qsec)
 #### ......
 
+    
 # --------------------------------
 # Plots
 # --------------------------------
@@ -157,26 +162,42 @@ ggplot(data=pdat, mapping=aes(x = FactorB, y = uM, group=FactorC, color = Factor
         legend.title=element_text(size=10, face="bold"),
         #legend.position=c(0.89,0.1),
         plot.title = element_text(size=16, lineheight=2, face="bold", margin=margin(b = 20, unit = "pt"))) +
-  annotate("text", x = 1.5, y = 1, label = "Some text") +
+        annotate("text", x = 1.5, y = 1, label = "Some text")
+
+      
+###############################
+# QC Plots
+###############################      
+      
+# Plot retention time of all compounds in all samples
+# --------------------------------------------------
+ 
+datSelected = datSamples %>%filter(SampleType %in% c("BLANK"))    
+       
+ggplot(data=datSelected, mapping=aes(x = SampleName, y = RT, color = SampleType)) +
+  ggtitle("Retention Time") +
+  geom_point(size = 3) +
+  geom_line(size=0.8)  +
+  scale_colour_brewer(palette = "Set1") +
+  theme_grey(base_size = 10) +
+  facet_wrap(~LipidName, scales="free") +
+  aes(ymin=0) +
+  xlab("Sample") +
+  ylab("Retention time [min]") + 
+  theme(axis.text=element_text(size=9), axis.title=element_text(size=12,face="bold"), 
+        strip.text = element_text(size=10, face="bold"),
+        legend.title=element_text(size=10, face="bold"),
+        #legend.position=c(0.89,0.1),
+        plot.title = element_text(size=16, lineheight=2, face="bold", margin=margin(b = 20, unit = "pt"))) +
+        annotate("text", x = 1.5, y = 1, label = "Some text")
 
 
-# #Plot Levels vs Number of Cells 
-# ggplot(data=pdat, mapping=aes(x = Time, y = meanConc, color= factor(Thrombin))) +
-#   ggtitle("Effect of Thrombin on S1P levels of isolated Platelets (CTAD method)") +
-#   geom_point(size = 3) +
-#   geom_line(size=0.7)  +
-#   theme_grey(base_size = 10) +
-#   facet_wrap(~LipidName, scales="free") +
-#   aes(ymin=0) +
-#   geom_errorbar(aes(ymax = meanConc + SDfmol, ymin=meanConc - SDfmol), width=1)  +
-#   #geom_smooth(method='lm', se = FALSE, level=0.95)
-#   xlab("Incubation time in presence of compound X [min]") +
-#   ylab("fmol / 10^9 platelets") + 
-#   scale_color_discrete(name = "compound X", labels = c("Control (0 uM)", "20 uM", "40 uM")) +
-#   theme(axis.text=element_text(size=9), axis.title=element_text(size=12,face="bold"), 
-#         strip.text = element_text(size=10, face="bold"),
-#         legend.title=element_text(size=10, face="bold"),
-#         #legend.position=c(0.89,0.1),
-#         plot.title = element_text(size=16, lineheight=2, face="bold", margin=margin(b = 20, unit = "pt")))
+        
+# Plot peak areas of compounds in all QC samples
+# --------------------------------------------------     
 
+
+# Plot peak areas of ISTDs in all samples, colored by sampleType
+# --------------------------------------------------------------     
+            
 
