@@ -11,5 +11,6 @@ This script aims to process Agilent MassHunter Quant Results:
 - Predicts sample type (sample, QC, Blank) based on sample file name   
 - Plots some QC charts
  
+Bo Burla & Adithya Diddapur
 
-Bo Burla, Singapore Lipidomics Incubator (SLING), National University of Singapore
+Singapore Lipidomics Incubator (SLING), National University of Singapore
