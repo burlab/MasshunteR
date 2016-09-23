@@ -20,12 +20,9 @@
 ###################################################################################################################
 
 
-<<<<<<< HEAD
-setwd("D:/Bo/Data/RawData/LCMS/ExperimentA")
-=======
+#setwd("D:/Bo/Data/RawData/LCMS/ExperimentA")
 #setwd("D:/Bo/Data/RawData/LCMS/GL08D_StabilityTests")
 setwd("D://Adithya//Sample data")
->>>>>>> 37d23f7f3e6c96ff068ef3cd36a3f3739af55269
 
 library(tidyr)
 library(dplyr)
@@ -81,18 +78,16 @@ dat[, names(dat) %in% factCol] <- lapply(dat[,names(dat) %in% factCol], as.facto
 dat <- dat %>% 
   mutate(SampleType=factor(ifelse(grepl("PQC", SampleName), "PQC", ifelse(grepl("TQC", SampleName), "TQC", ifelse(grepl("BLANK", SampleName), "BLANK", "Sample"))))) 
 
-<<<<<<< HEAD
 # Normalize with corresponding ISTD, according to external data file (compound-ISTD mapping file)
 
 #dat1 <- dat %>% group_by(SampleFileName) %>% mutate(NormArea = Compound)
-dat <- dat  %>% group_by(SampleFileName) %>% mutate(ISTD = sapply(Compound,function(y) mapISTD[which(y == mapISTD$Compound),2])) # DOES NOT WORK YET
-dat <- dat %>% mutate(NormArea = Area/ISTD) 
+dat <- dat %>% mutate(ISTD = sapply(Compound,function(y) mapISTD[which(y == mapISTD$Compound),2])) # DOES NOT WORK YET
+
 
 # Write sample type (guessed based on sample name) of all samples into an additional column
-=======
+
 # add the ISTD data to the dataset
 dat <- dat %>% mutate(ISTD = sapply(Compound,function(y) mapISTD[which(y == mapISTD$Compound),2])) # DOES NOT WORK YET
-# subsets the dataset to only include information about the ISTDs
 
 # Function which takes a compound and returns it's normalised area
 # com is the column name (use Area.X) and row is each row(timestamp)
@@ -120,7 +115,6 @@ dat <- dat %>% group_by(SampleFileName)
 
 
 # Guess sample type of all runs
->>>>>>> 37d23f7f3e6c96ff068ef3cd36a3f3739af55269
 dat <- dat %>% 
   mutate(SampleType=ifelse(grepl("QC", SampleName), "QC", ifelse(grepl("BLK", SampleName), "BLANK", "Sample")))
 
