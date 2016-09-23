@@ -20,7 +20,12 @@
 ###################################################################################################################
 
 
+<<<<<<< HEAD
 setwd("D:/Bo/Data/RawData/LCMS/ExperimentA")
+=======
+#setwd("D:/Bo/Data/RawData/LCMS/GL08D_StabilityTests")
+setwd("D://Adithya//Sample data")
+>>>>>>> 37d23f7f3e6c96ff068ef3cd36a3f3739af55269
 
 library(tidyr)
 library(dplyr)
@@ -76,6 +81,7 @@ dat[, names(dat) %in% factCol] <- lapply(dat[,names(dat) %in% factCol], as.facto
 dat <- dat %>% 
   mutate(SampleType=factor(ifelse(grepl("PQC", SampleName), "PQC", ifelse(grepl("TQC", SampleName), "TQC", ifelse(grepl("BLANK", SampleName), "BLANK", "Sample"))))) 
 
+<<<<<<< HEAD
 # Normalize with corresponding ISTD, according to external data file (compound-ISTD mapping file)
 
 #dat1 <- dat %>% group_by(SampleFileName) %>% mutate(NormArea = Compound)
@@ -83,6 +89,38 @@ dat <- dat  %>% group_by(SampleFileName) %>% mutate(ISTD = sapply(Compound,funct
 dat <- dat %>% mutate(NormArea = Area/ISTD) 
 
 # Write sample type (guessed based on sample name) of all samples into an additional column
+=======
+# add the ISTD data to the dataset
+dat <- dat %>% mutate(ISTD = sapply(Compound,function(y) mapISTD[which(y == mapISTD$Compound),2])) # DOES NOT WORK YET
+# subsets the dataset to only include information about the ISTDs
+
+# Function which takes a compound and returns it's normalised area
+# com is the column name (use Area.X) and row is each row(timestamp)
+normalise <- function(row){
+  compo <- row[["Compound"]]
+  time <- row[["AcqTime"]]
+  compo <- gsub("^.*\\.","",compo) # Extracts the name of the compound to reference from setnames
+  istd <- mapISTD[which(mapISTD$Compound==compo),2] # Finds the relevant ISTD
+  row <- filter(datWide,AcqTime==time)
+  # Finds the areas of the compound and the istd before calculating the normalised area
+  compArea <- as.numeric(select(row,contains(paste("Area",compo,sep=".")))[,1])
+  istdArea <- as.numeric(select(row,contains(paste("Area",istd,sep=".")))[,1])
+  normalisedArea <- compArea/istdArea
+  normalisedArea
+}
+
+# Vectors containing all the compounds and times
+compoundList <- unique(dat$Compound)
+timeList <- unique(dat$AcqTime)
+# Normalises the data and adds the result to a new column
+dat <- mutate(dat, NormArea = apply(dat,1,normalise))
+
+# Groups the data for later processing
+dat <- dat %>% group_by(SampleFileName)
+
+
+# Guess sample type of all runs
+>>>>>>> 37d23f7f3e6c96ff068ef3cd36a3f3739af55269
 dat <- dat %>% 
   mutate(SampleType=ifelse(grepl("QC", SampleName), "QC", ifelse(grepl("BLK", SampleName), "BLANK", "Sample")))
 
