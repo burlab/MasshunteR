@@ -100,24 +100,16 @@ normalise <- function(row){
 compoundList <- unique(dat$Compound)
 timeList <- unique(dat$AcqTime)
 # Normalises the data and adds the result to a new column
-dat1 <- mutate(dat, normArea = apply(dat,1,normalise))
+dat <- mutate(dat, NormArea = apply(dat,1,normalise))
 
 # Groups the data for later processing
 dat <- dat %>% group_by(SampleFileName)
 
 
-
-# Pre-processing of data: remove not interesting columns, rename other columns and backup sample name
-dat <- dat[, !(colnames(dat) %in% c("Peptide.Sequence","Precursor.Charge","Product.Charge","Fragment.Ion"))]
-#setnames(dat, old=c("Protein.Name","Replicate.Name", "Precursor.Mz", "Product.Mz", "Peak.Rank" ), new=c("LipidName", "SampleName", "PrecursorMz", "ProductMz", "Peak.Rank"))
-#dat$SampleNameOriginal=dat$SampleName
-
 # Guess sample type of all runs
 dat <- dat %>% 
   mutate(SampleType=ifelse(grepl("QC", SampleName), "QC", ifelse(grepl("BLK", SampleName), "BLANK", "Sample")))
 
-# Normalize with IS
-#dat <- dat %>% mutate(NormArea = Area/subset(Area, LipidName=="13C2D2_S1P")) 
 
 # Calculate concentrations based on spiked of ISTD (CUSTOMIZE to your data)
 ISTD_CONC = 20 # ng/mL
