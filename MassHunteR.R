@@ -19,7 +19,6 @@
 #
 ###################################################################################################################
 
-
 #setwd("D:/Bo/Data/RawData/LCMS/ExperimentA")
 #setwd("D:/Bo/Data/RawData/LCMS/GL08D_StabilityTests")
 setwd("D://Adithya//Sample data")
@@ -35,9 +34,17 @@ library(RColorBrewer)
 ###################################################################################################################
 
 # Read Agilent MassHunter Quant Export file (CSV)
-datWide <- read.csv("Results.csv", header = FALSE, sep = ",", na.strings=c("#N/A", "NULL"), check.names=FALSE, as.is=TRUE)
-mapISTD <- read.csv("CompoundISTDList.csv", header = TRUE, sep = ",", check.names=TRUE, as.is=TRUE)
+datWide <- read.csv("20160615_Pred_ACTH_Original_Data.csv", header = FALSE, sep = ",", na.strings=c("#N/A", "NULL"), check.names=FALSE, as.is=TRUE, strip.white=TRUE )
+mapISTD <- read.csv("CompoundISTDList_SLING-PL-Panel_V1.csv", header = TRUE, sep = ",", check.names=TRUE, as.is=TRUE, strip.white = TRUE)
+#datWide <- read.csv("Results.csv", header = FALSE, sep = ",", na.strings=c("#N/A", "NULL"), check.names=FALSE, as.is=TRUE)
+#mapISTD <- read.csv("CompoundISTDList.csv", header = TRUE, sep = ",", check.names=TRUE, as.is=TRUE, strip.white = TRUE)
 datWide[1,] <- lapply(datWide[1,],function(y) gsub(" Results","",y))
+if(datWide[2,2]=="" & !is.na(datWide[2,2])){
+  datWide[2,2] <- "a"
+  count = 6
+} else {
+  count = 5
+}
 
 # Fill in compound name in empty columns (different parameters of the same compound)
 for(c in 1:ncol(datWide)){
@@ -59,7 +66,7 @@ setnames(datWide, old=c(".Sample","Data File.Sample", "Name.Sample", "Acq. Date-
 datWide = datWide[, !names(datWide) %in% c("NA.Sample","Level.Sample")]
 
 # Transform wide to long (tidy) table format
-datLong=reshape(datWide,idvar = "SampleFileName", varying = colnames(datWide[,-1:-5]), direction = "long",sep = "." )
+datLong=reshape(datWide,idvar = "SampleFileName", varying = colnames(datWide[,-1:-count]), direction = "long",sep = "." )
 row.names(datLong) <- NULL
 setnames(datLong, old=c("time"), new=c("Compound"))
 
@@ -69,7 +76,6 @@ numCol <- c("RT","Area","Height", "FWHM")
 dat[, names(dat) %in% numCol] <- lapply(dat[,names(dat) %in% numCol], as.numeric)
 factCol <- c("QuantWarning","SampleName","SampleFileName","SampleTypeMethod", "Compound")
 dat[, names(dat) %in% factCol] <- lapply(dat[,names(dat) %in% factCol], as.factor)
-
 ###################################################################################################################
 # ISTD normalization and calculation of absolute concentrations
 ###################################################################################################################
@@ -80,35 +86,31 @@ dat <- dat %>%
 
 # Normalize with corresponding ISTD, according to external data file (compound-ISTD mapping file)
 
-#dat1 <- dat %>% group_by(SampleFileName) %>% mutate(NormArea = Compound)
-dat <- dat %>% mutate(ISTD = sapply(Compound,function(y) mapISTD[which(y == mapISTD$Compound),2])) # DOES NOT WORK YET
-
-
 # Write sample type (guessed based on sample name) of all samples into an additional column
 
 # add the ISTD data to the dataset
-dat <- dat %>% mutate(ISTD = sapply(Compound,function(y) mapISTD[which(y == mapISTD$Compound),2])) # DOES NOT WORK YET
+dat <- dat %>% mutate(ISTD = sapply(Compound,function(y) mapISTD[which(y == mapISTD$Compound),2])) 
+print("x")
 
 # Function which takes a compound and returns it's normalised area
-# com is the column name (use Area.X) and row is each row(timestamp)
+# input is a conmplete row from the data frame
+
 normalise <- function(row){
   compo <- row[["Compound"]]
   fileName <- row[["SampleFileName"]]
-  compo <- gsub("^.*\\.","",compo) # Extracts the name of the compound to reference from setnames
+  #compo <- gsub("^.*\\.","",compo) # Extracts the name of the compound to reference from setnames
   istd <- mapISTD[which(mapISTD$Compound==compo),2] # Finds the relevant ISTD
-  row <- filter(datWide,SampleFileName==fileName)
-  # Finds the areas of the compound and the istd before calculating the normalised area
-  compArea <- as.numeric(select(row,contains(paste("Area",compo,sep=".")))[,1])
-  istdArea <- as.numeric(select(row,contains(paste("Area",istd,sep=".")))[,1])
+  istdArea <- filter(dat, Compound==istd, SampleFileName==fileName)$Area
+  #istdArea <- dat[dat$Compound==istd&dat$SampleFileName==fileName,]$Area
+  compArea <- row$Area
   normalisedArea <- compArea/istdArea
   normalisedArea
 }
 
-# Vectors containing all the compounds and times
-compoundList <- unique(dat$Compound)
-timeList <- unique(dat$AcqTime)
 # Normalises the data and adds the result to a new column
+Rprof(line.profiling = TRUE)
 dat <- mutate(dat, NormArea = apply(dat,1,normalise))
+Rprof(NULL)
 
 # Groups the data for later processing
 dat <- dat %>% group_by(SampleFileName)
@@ -142,6 +144,7 @@ dat <- dat %>%
 # Alternatively: yet another input table containing sample information
 
 # Assuming 3 factors... (can this be made flexible, assuming all samples names are consistent?)
+print("x")
 expGrp = c("FactorA", "FactorB", "FactorC")
 
 datSamples <- dat %>% filter(SampleType =="Sample") %>% 
