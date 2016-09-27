@@ -28,6 +28,7 @@ library(dplyr)
 library(ggplot2)
 library(data.table)
 library(RColorBrewer)
+library(xlsx)
 
 ###################################################################################################################
 # Import Agilent MassHunter Quant Export file (CSV) and convert to long (tidy) data format
@@ -36,11 +37,10 @@ library(RColorBrewer)
 # Read Agilent MassHunter Quant Export file (CSV)
 datWide <- read.csv("20160615_Pred_ACTH_Original_Data.csv", header = FALSE, sep = ",", na.strings=c("#N/A", "NULL"), check.names=FALSE, as.is=TRUE, strip.white=TRUE )
 mapISTD <- read.csv("CompoundISTDList_SLING-PL-Panel_V1.csv", header = TRUE, sep = ",", check.names=TRUE, as.is=TRUE, strip.white = TRUE)
-#ISTDDetails <- read.csv("")
+ISTDDetails <- read.xlsx("ISTD-map-conc_SLING-PL-Panel_V1.xlsx", sheetIndex = 2)
+ISTDDetails$ISTD <- trimws(ISTDDetails$ISTD)
 #datWide <- read.csv("Results.csv", header = FALSE, sep = ",", na.strings=c("#N/A", "NULL"), check.names=FALSE, as.is=TRUE)
 #mapISTD <- read.csv("CompoundISTDList.csv", header = TRUE, sep = ",", check.names=TRUE, as.is=TRUE, strip.white = TRUE)
-# Removes whitespaces from strings
-#datWide <- apply(datWide, MARGIN = c(1,2), trimws)
 
 datWide[1,] <- lapply(datWide[1,],function(y) gsub(" Results","",y))
 if(datWide[2,2]=="" & !is.na(datWide[2,2])){
@@ -130,12 +130,33 @@ dat[,SampleType:=ifelse(grepl("QC", SampleName), "QC", ifelse(grepl("BLK", Sampl
 
 # Calculate concentrations based on spiked of ISTD (CUSTOMIZE to your data)...
 # ToDo: Transfer these info to seperate input files
-ISTD_CONC = 20 # ng/mL
-ISTD_MW = 383.47 # g mol-1
+#ISTD_CONC = 20 # ng/mL
+#ISTD_MW = 383.47 # g mol-1
 ISTD_VOL = 50 # uL
 SAMPLE_VOL = 5 # uL
-dat[,uM := (unlist(NormArea)   * (ISTD_VOL/1000 * ISTD_CONC/ISTD_MW*1000) / SAMPLE_VOL * 1000)/1000]
-dat[,ngml := (unlist(NormArea)   * (ISTD_VOL/1000 * ISTD_CONC) / SAMPLE_VOL * 1000)]
+#dat[,uM := (unlist(NormArea)   * (ISTD_VOL/1000 * ISTD_CONC/ISTD_MW*1000) / SAMPLE_VOL * 1000)/1000]
+#dat[,ngml := (unlist(NormArea)   * (ISTD_VOL/1000 * ISTD_CONC) / SAMPLE_VOL * 1000)]
+
+## THE FOLLOWING 2 FUNCTIONS STILL NEED WORK
+uMValue <- function(tempISTD,tempNormArea){
+  istd <- tempISTD
+  ISTD_CONC <- ISTDDetails[ISTDDetails$ISTD==istd,"ISTDconcNGML"]
+  ISTD_MW <- ISTDDetails[ISTDDetails$ISTD==istd,"ISTD_MW"]
+  normArea <- tempNormArea
+  uMVal <- (NormArea   * (ISTD_VOL/1000 * ISTD_CONC/ISTD_MW*1000) / SAMPLE_VOL * 1000)/1000
+}
+
+ngmlValue <- function(row){
+  istd <- row$ISTD
+  ISTD_CONC <- ISTDDetails[ISTDDetails$ISTD==istd,"ISTDconcNGML"]
+  ISTD_MW <- ISTDDetails[ISTDDetails$ISTD==istd,"ISTD_MW"]
+  normalisedArea <- row$NormArea
+  ngmlVal <- unlist(NormArea)   * (ISTD_VOL/1000 * ISTD_CONC) / SAMPLE_VOL * 1000
+  ngmlVal
+}
+
+# <- mutate(dat, uM = uMValue(ISTD,NormArea))
+dat[,uM := uMValue(ISTD,NormArea)]
 
 
 ###############################
@@ -149,25 +170,26 @@ dat[,ngml := (unlist(NormArea)   * (ISTD_VOL/1000 * ISTD_CONC) / SAMPLE_VOL * 10
 # Alternatively: yet another input table containing sample information
 
 # Assuming 3 factors... (can this be made flexible, assuming all samples names are consistent?)
-print("x")
+print("y")
 expGrp = c("FactorA", "FactorB", "FactorC")
-print("x")
+print("z")
 
-datSamples <- dat %>% filter(SampleType =="Sample") %>% 
-  separate(col = SampleName, into = expGrp, convert=TRUE, remove=FALSE, sep ="-")
+datSamples <- dat %>% filter(SampleType =="Sample")  
+print("a")
+datSamples <- separate(datSamples,col = SampleName, into = expGrp, convert=TRUE, remove=FALSE, sep ="-")
 print("x")
 
 # necessary? (can this be made flexible, in case there are more factors, e.g. using col indices?)   
-datSamples$FactorA = as.factor(dat$FactorA)
-datSamples$FactorB <- as.factor(dat$FactorB)
-datSamples$FactorC <- as.factor(dat$FactorC)
+datSamples$FactorA = as.factor(datSamples$FactorA)
+datSamples$FactorB <- as.factor(datSamples$FactorB)
+datSamples$FactorC <- as.factor(datSamples$FactorC)
 
 # Basic statistics: mean +/- SD, t Test...
 # ------------------------------------------
 
 #### Work in progress....
     # Calculate average and SD of all replicates
-    datSelected <- datSelected %>% group_by(LipidName, FactorA, FactorB) %>% 
+    datSelected <- datSamples %>% group_by(Compound, FactorA, FactorB) %>% 
       summarise(meanArea=mean(Area), SDarea = sd(Area), meanuM=mean(uM), SDuM = sd(uM))
     
     # Calculate t tests...  
@@ -177,7 +199,7 @@ datSamples$FactorC <- as.factor(dat$FactorC)
     filterFactorA = c("Control", "TreatmentA")
     datSelected = datSamples %>%filter(FactorA %in% filterFactorA)
 
-    meanNormArea <- datSelected %>% group_by(LipidName, FactorB) %>% 
+    meanNormArea <- datSelected %>% group_by(Compound, FactorB) %>% 
       summarise_each(funs(t.test(.[vs == 0], .[vs == 1])$p.value), vars = disp:qsec)
 #### ......
 
