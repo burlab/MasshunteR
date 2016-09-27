@@ -36,8 +36,12 @@ library(RColorBrewer)
 # Read Agilent MassHunter Quant Export file (CSV)
 datWide <- read.csv("20160615_Pred_ACTH_Original_Data.csv", header = FALSE, sep = ",", na.strings=c("#N/A", "NULL"), check.names=FALSE, as.is=TRUE, strip.white=TRUE )
 mapISTD <- read.csv("CompoundISTDList_SLING-PL-Panel_V1.csv", header = TRUE, sep = ",", check.names=TRUE, as.is=TRUE, strip.white = TRUE)
+#ISTDDetails <- read.csv("")
 #datWide <- read.csv("Results.csv", header = FALSE, sep = ",", na.strings=c("#N/A", "NULL"), check.names=FALSE, as.is=TRUE)
 #mapISTD <- read.csv("CompoundISTDList.csv", header = TRUE, sep = ",", check.names=TRUE, as.is=TRUE, strip.white = TRUE)
+# Removes whitespaces from strings
+#datWide <- apply(datWide, MARGIN = c(1,2), trimws)
+
 datWide[1,] <- lapply(datWide[1,],function(y) gsub(" Results","",y))
 if(datWide[2,2]=="" & !is.na(datWide[2,2])){
   datWide[2,2] <- "a"
@@ -72,10 +76,12 @@ setnames(datLong, old=c("time"), new=c("Compound"))
 
 # Covert to data.table object and change column types
 dat <- dplyr::tbl_df(datLong)
+datWide <- dplyr::tbl_df(datWide)
 numCol <- c("RT","Area","Height", "FWHM")
 dat[, names(dat) %in% numCol] <- lapply(dat[,names(dat) %in% numCol], as.numeric)
-factCol <- c("QuantWarning","SampleName","SampleFileName","SampleTypeMethod", "Compound")
+factCol <- c("QuantWarning","SampleName","SampleFileName","SampleTypeMethod")
 dat[, names(dat) %in% factCol] <- lapply(dat[,names(dat) %in% factCol], as.factor)
+dat$Compound <- trimws(dat$Compound)
 ###################################################################################################################
 # ISTD normalization and calculation of absolute concentrations
 ###################################################################################################################
@@ -93,32 +99,33 @@ dat <- dat %>% mutate(ISTD = sapply(Compound,function(y) mapISTD[which(y == mapI
 print("x")
 
 # Function which takes a compound and returns it's normalised area
-# input is a conmplete row from the data frame
+# input is a complete row from the data frame
 
 normalise <- function(row){
-  compo <- row[["Compound"]]
-  fileName <- row[["SampleFileName"]]
-  #compo <- gsub("^.*\\.","",compo) # Extracts the name of the compound to reference from setnames
-  istd <- mapISTD[which(mapISTD$Compound==compo),2] # Finds the relevant ISTD
-  istdArea <- filter(dat, Compound==istd, SampleFileName==fileName)$Area
-  #istdArea <- dat[dat$Compound==istd&dat$SampleFileName==fileName,]$Area
-  compArea <- row$Area
-  normalisedArea <- compArea/istdArea
-  normalisedArea
+    compo <- trimws(row[["Compound"]])
+    fileName <- row[["SampleFileName"]]
+    istd <- row[["ISTD"]]
+    compArea <- as.numeric(row[["Area"]])
+    istdArea <- as.numeric(dat[dat$SampleFileName == fileName & dat$Compound == istd,][["Area"]])
+    normalisedArea <- compArea / istdArea
+    normalisedArea
 }
 
 # Normalises the data and adds the result to a new column
 Rprof(line.profiling = TRUE)
-dat <- mutate(dat, NormArea = apply(dat,1,normalise))
+#x <- apply(dat,1, normalise)
+dat <- as.data.table(dat)
+dat[,NormArea := apply(dat,1,normalise)]
+#dat <- mutate(dat, NormArea = apply(dat,1,normalise))
 Rprof(NULL)
 
 # Groups the data for later processing
-dat <- dat %>% group_by(SampleFileName)
-
+#dat <- dat %>% group_by(SampleFileName)
 
 # Guess sample type of all runs
-dat <- dat %>% 
-  mutate(SampleType=ifelse(grepl("QC", SampleName), "QC", ifelse(grepl("BLK", SampleName), "BLANK", "Sample")))
+dat[,SampleType:=ifelse(grepl("QC", SampleName), "QC", ifelse(grepl("BLK", SampleName), "BLANK", "Sample"))]
+#dat <- dat %>% 
+#  mutate(SampleType=ifelse(grepl("QC", SampleName), "QC", ifelse(grepl("BLK", SampleName), "BLANK", "Sample")))
 
 
 # Calculate concentrations based on spiked of ISTD (CUSTOMIZE to your data)...
@@ -127,10 +134,8 @@ ISTD_CONC = 20 # ng/mL
 ISTD_MW = 383.47 # g mol-1
 ISTD_VOL = 50 # uL
 SAMPLE_VOL = 5 # uL
-dat <- dat %>% 
-  mutate(uM = (NormArea   * (ISTD_VOL/1000 * ISTD_CONC/ISTD_MW*1000) / SAMPLE_VOL * 1000)/1000) %>%  
-  mutate(ngml = (NormArea   * (ISTD_VOL/1000 * ISTD_CONC) / SAMPLE_VOL * 1000))
-
+dat[,uM := (unlist(NormArea)   * (ISTD_VOL/1000 * ISTD_CONC/ISTD_MW*1000) / SAMPLE_VOL * 1000)/1000]
+dat[,ngml := (unlist(NormArea)   * (ISTD_VOL/1000 * ISTD_CONC) / SAMPLE_VOL * 1000)]
 
 
 ###############################
@@ -146,9 +151,11 @@ dat <- dat %>%
 # Assuming 3 factors... (can this be made flexible, assuming all samples names are consistent?)
 print("x")
 expGrp = c("FactorA", "FactorB", "FactorC")
+print("x")
 
 datSamples <- dat %>% filter(SampleType =="Sample") %>% 
   separate(col = SampleName, into = expGrp, convert=TRUE, remove=FALSE, sep ="-")
+print("x")
 
 # necessary? (can this be made flexible, in case there are more factors, e.g. using col indices?)   
 datSamples$FactorA = as.factor(dat$FactorA)
