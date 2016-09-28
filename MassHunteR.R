@@ -19,6 +19,19 @@
 #
 ###################################################################################################################
 
+
+###################################################################################################################
+#
+# CONSTANTS
+#--------------------------------------------------------
+#
+# Consants used to calculate the concentrations later on
+ISTD_VOL = 50 # uL
+SAMPLE_VOL = 5 # uL
+#
+####################################################################################################################
+
+
 #setwd("D:/Bo/Data/RawData/LCMS/ExperimentA")
 #setwd("D:/Bo/Data/RawData/LCMS/GL08D_StabilityTests")
 setwd("D://Adithya//Sample data")
@@ -39,8 +52,6 @@ datWide <- read.csv("20160615_Pred_ACTH_Original_Data.csv", header = FALSE, sep 
 mapISTD <- read.csv("CompoundISTDList_SLING-PL-Panel_V1.csv", header = TRUE, sep = ",", check.names=TRUE, as.is=TRUE, strip.white = TRUE)
 ISTDDetails <- read.xlsx("ISTD-map-conc_SLING-PL-Panel_V1.xlsx", sheetIndex = 2)
 ISTDDetails$ISTD <- trimws(ISTDDetails$ISTD)
-#datWide <- read.csv("Results.csv", header = FALSE, sep = ",", na.strings=c("#N/A", "NULL"), check.names=FALSE, as.is=TRUE)
-#mapISTD <- read.csv("CompoundISTDList.csv", header = TRUE, sep = ",", check.names=TRUE, as.is=TRUE, strip.white = TRUE)
 
 datWide[1,] <- lapply(datWide[1,],function(y) gsub(" Results","",y))
 if(datWide[2,2]=="" & !is.na(datWide[2,2])){
@@ -90,17 +101,11 @@ dat$Compound <- trimws(dat$Compound)
 dat <- dat %>% 
   mutate(SampleType=factor(ifelse(grepl("PQC", SampleName), "PQC", ifelse(grepl("TQC", SampleName), "TQC", ifelse(grepl("BLANK", SampleName), "BLANK", "Sample"))))) 
 
-# Normalize with corresponding ISTD, according to external data file (compound-ISTD mapping file)
-
-# Write sample type (guessed based on sample name) of all samples into an additional column
-
 # add the ISTD data to the dataset
 dat <- dat %>% mutate(ISTD = sapply(Compound,function(y) mapISTD[which(y == mapISTD$Compound),2])) 
-print("x")
 
 # Function which takes a compound and returns it's normalised area
 # input is a complete row from the data frame
-
 normalise <- function(row){
     compo <- trimws(row[["Compound"]])
     fileName <- row[["SampleFileName"]]
@@ -120,7 +125,7 @@ dat[,NormArea := apply(dat,1,normalise)]
 Rprof(NULL)
 
 # Groups the data for later processing
-#dat <- dat %>% group_by(SampleFileName)
+dat <- dat %>% group_by(SampleFileName)
 
 # Guess sample type of all runs
 dat[,SampleType:=ifelse(grepl("QC", SampleName), "QC", ifelse(grepl("BLK", SampleName), "BLANK", "Sample"))]
