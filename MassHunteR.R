@@ -134,29 +134,30 @@ dat[,SampleType:=ifelse(grepl("QC", SampleName), "QC", ifelse(grepl("BLK", Sampl
 #ISTD_MW = 383.47 # g mol-1
 ISTD_VOL = 50 # uL
 SAMPLE_VOL = 5 # uL
-#dat[,uM := (unlist(NormArea)   * (ISTD_VOL/1000 * ISTD_CONC/ISTD_MW*1000) / SAMPLE_VOL * 1000)/1000]
-#dat[,ngml := (unlist(NormArea)   * (ISTD_VOL/1000 * ISTD_CONC) / SAMPLE_VOL * 1000)]
 
-## THE FOLLOWING 2 FUNCTIONS STILL NEED WORK
-uMValue <- function(tempISTD,tempNormArea){
-  istd <- tempISTD
+# Functions to calculate the concentrations and then add them to dat
+# Each function takes an entire row from dat as input
+uMValue <- function(row){
+  istd <- row[["ISTD"]]
   ISTD_CONC <- ISTDDetails[ISTDDetails$ISTD==istd,"ISTDconcNGML"]
   ISTD_MW <- ISTDDetails[ISTDDetails$ISTD==istd,"ISTD_MW"]
-  normArea <- tempNormArea
-  uMVal <- (NormArea   * (ISTD_VOL/1000 * ISTD_CONC/ISTD_MW*1000) / SAMPLE_VOL * 1000)/1000
+  normalisedArea <- row[["NormArea"]]
+  umVal <- (as.numeric(normalisedArea)   * (ISTD_VOL/1000 * ISTD_CONC/ISTD_MW*1000) / SAMPLE_VOL * 1000)/1000
+  umVal
 }
 
 ngmlValue <- function(row){
-  istd <- row$ISTD
+  istd <- row[["ISTD"]]
   ISTD_CONC <- ISTDDetails[ISTDDetails$ISTD==istd,"ISTDconcNGML"]
   ISTD_MW <- ISTDDetails[ISTDDetails$ISTD==istd,"ISTD_MW"]
-  normalisedArea <- row$NormArea
-  ngmlVal <- unlist(NormArea)   * (ISTD_VOL/1000 * ISTD_CONC) / SAMPLE_VOL * 1000
+  normalisedArea <- row[["NormArea"]]
+  ngmlVal <- as.numeric(normalisedArea)   * (ISTD_VOL/1000 * ISTD_CONC) / SAMPLE_VOL * 1000
   ngmlVal
 }
 
 # <- mutate(dat, uM = uMValue(ISTD,NormArea))
-dat[,uM := uMValue(ISTD,NormArea)]
+dat[,uM := apply(dat,1,uMValue)]
+dat[,ngml := apply(dat,1,ngmlValue)]
 
 
 ###############################
