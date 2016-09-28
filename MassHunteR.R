@@ -28,6 +28,10 @@
 # Consants used to calculate the concentrations later on
 ISTD_VOL = 50 # uL
 SAMPLE_VOL = 5 # uL
+
+# Constants used to split the data and perform statistical analysis (t.test so far)
+expGrp = c("FactorA", "FactorB", "FactorC")
+filterFactorA = c("Pred", "d0")
 #
 ####################################################################################################################
 
@@ -176,17 +180,14 @@ dat[,ngml := apply(dat,1,ngmlValue)]
 # Alternatively: yet another input table containing sample information
 
 # Assuming 3 factors... (can this be made flexible, assuming all samples names are consistent?)
-print("y")
-expGrp = c("FactorA", "FactorB", "FactorC")
-print("z")
+#expGrp = c("FactorA", "FactorB", "FactorC")
 
 datSamples <- dat %>% filter(SampleType =="Sample")  
-print("a")
 datSamples <- separate(datSamples,col = SampleName, into = expGrp, convert=TRUE, remove=FALSE, sep ="-")
-print("x")
+datSamples$FactorA <- gsub("^.*?_","",datSamples[[4]])
 
 # necessary? (can this be made flexible, in case there are more factors, e.g. using col indices?)   
-datSamples$FactorA = as.factor(datSamples$FactorA)
+datSamples$FactorA <- as.factor(datSamples$FactorA)
 datSamples$FactorB <- as.factor(datSamples$FactorB)
 datSamples$FactorC <- as.factor(datSamples$FactorC)
 
@@ -194,19 +195,19 @@ datSamples$FactorC <- as.factor(datSamples$FactorC)
 # ------------------------------------------
 
 #### Work in progress....
-    # Calculate average and SD of all replicates
-    datSelected <- datSamples %>% group_by(Compound, FactorA, FactorB) %>% 
-      summarise(meanArea=mean(Area), SDarea = sd(Area), meanuM=mean(uM), SDuM = sd(uM))
+# Calculate average and SD of all replicates
+datSelected <- datSamples %>% group_by(Compound, FactorA, FactorB) %>% 
+  summarise(meanArea=mean(Area), SDarea = sd(Area), meanuM=mean(uM), SDuM = sd(uM))
     
-    # Calculate t tests...  
-    # ! Don't think this works yet...  
+# Calculate t tests...  
+# ! Don't think this works yet...  
     
-    # Filter for specific FactorA values
-    filterFactorA = c("Control", "TreatmentA")
-    datSelected = datSamples %>%filter(FactorA %in% filterFactorA)
+# Filter for specific FactorA values
+#filterFactorA = c("Control", "TreatmentA")
+datSelected <- datSelected %>% filter(FactorA %in% filterFactorA)
 
-    meanNormArea <- datSelected %>% group_by(Compound, FactorB) %>% 
-      summarise_each(funs(t.test(.[vs == 0], .[vs == 1])$p.value), vars = disp:qsec)
+meanNormArea <- datSelected %>% group_by(Compound, FactorB) %>% 
+  summarise_each(funs(t.test(.[vs == 0], .[vs == 1])$p.value), vars = meanArea:SDuM)
 #### ......
 
     
