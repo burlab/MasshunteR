@@ -30,8 +30,8 @@ ISTD_VOL = 50 # uL
 SAMPLE_VOL = 5 # uL
 
 # Constants used to split the data and perform statistical analysis (t.test so far)
-expGrp = c("FactorA", "FactorB", "FactorC")
-filterFactorA = c("Pred", "d0")
+expGrp = c("ParameterA", "ParameterB", "ParameterC")
+filterParameterA = c("Pred")
 #
 ####################################################################################################################
 
@@ -42,6 +42,7 @@ setwd("D://Adithya//Sample data")
 
 library(tidyr)
 library(dplyr)
+library(dtplyr)
 library(ggplot2)
 library(data.table)
 library(RColorBrewer)
@@ -124,7 +125,7 @@ normalise <- function(row){
 Rprof(line.profiling = TRUE)
 #x <- apply(dat,1, normalise)
 dat <- as.data.table(dat)
-dat[,NormArea := apply(dat,1,normalise)]
+dat[,NormArea := apply(dat,1,normalise)] #can improve with lapply and rowwise()
 #dat <- mutate(dat, NormArea = apply(dat,1,normalise))
 Rprof(NULL)
 
@@ -184,30 +185,46 @@ dat[,ngml := apply(dat,1,ngmlValue)]
 
 datSamples <- dat %>% filter(SampleType =="Sample")  
 datSamples <- separate(datSamples,col = SampleName, into = expGrp, convert=TRUE, remove=FALSE, sep ="-")
-datSamples$FactorA <- gsub("^.*?_","",datSamples[[4]])
+datSamples$ParameterA <- gsub("^.*?_","",datSamples[[4]])
 
 # necessary? (can this be made flexible, in case there are more factors, e.g. using col indices?)   
-datSamples$FactorA <- as.factor(datSamples$FactorA)
-datSamples$FactorB <- as.factor(datSamples$FactorB)
-datSamples$FactorC <- as.factor(datSamples$FactorC)
+datSamples$ParameterA <- as.factor(datSamples$ParameterA)
+datSamples$ParameterA <- as.factor(datSamples$ParameterA)
+datSamples$ParameterA <- as.factor(datSamples$ParameterA)
 
 # Basic statistics: mean +/- SD, t Test...
 # ------------------------------------------
 
 #### Work in progress....
 # Calculate average and SD of all replicates
-datSelected <- datSamples %>% group_by(Compound, FactorA, FactorB) %>% 
-  summarise(meanArea=mean(Area), SDarea = sd(Area), meanuM=mean(uM), SDuM = sd(uM))
-    
+datSelected <- datSamples %>% group_by(Compound, ParameterA, ParameterB) %>% 
+  summarise(meanNormArea=mean(NormArea), SDNormarea = sd(NormArea), meanuM=mean(uM), SDuM = sd(uM), nArea = n())
+#datSelected[,n := .N, by=list(Compound,ParameterB)]
 # Calculate t tests...  
 # ! Don't think this works yet...  
     
 # Filter for specific FactorA values
-#filterFactorA = c("Control", "TreatmentA")
-datSelected <- datSelected %>% filter(FactorA %in% filterFactorA)
+#datSelected <- datSelected %>% filter(ParameterA %in% filterParameterA)
 
-meanNormArea <- datSelected %>% group_by(Compound, FactorB) %>% 
-  summarise_each(funs(t.test(.[vs == 0], .[vs == 1])$p.value), vars = meanArea:SDuM)
+# function to calculate t-test using sample statistics instead of an actual dataset
+tTestWithStatistics <- function(mean, sd, n, mu=0){
+  (mean-mu)/(sd/sqrt(n))
+}
+
+#datSelected <- datSelected %>% mutate(tTestValue = tTestWithStatistics(meanNormArea, SDNormarea, nArea))
+#datSelected <- datSelected %>% mutate (pValue = 2*pt(tTestValue,nArea-1))
+
+meanNormArea <- datSamples %>% filter(ParameterA %in% filterParameterA) %>%
+  group_by(Compound,ParameterB) %>%
+  summarise_each(funs(function(x)t.test(x)$p.value), vars=NormArea)
+#meanNormArea[,.(pValue:=t.test(meanNormArea)$p.value),by=.(Compound,ParameterB)]
+
+
+#setkey(meanNormArea,Compound,ParameterB)
+#meanNormArea[,tTestNormMean := (t.test(NormArea)$p.value), by=.(Compound,ParameterB)]
+#meanNormArea[,tTestNormMean := t.test(NormArea),by=list(Compound,ParameterB)]
+#meanNormArea <- meanNormArea %>% summarise_each(funs(function(x) t.test(x)$p.value), vars=meanNormArea)
+#meanNormArea <- meanNormArea %>%  summarise_each(funs(t.test), vars = NormArea)
 #### ......
 
     
@@ -216,13 +233,13 @@ meanNormArea <- datSelected %>% group_by(Compound, FactorB) %>%
 # --------------------------------
 # Plot concentrations vs FactorA for each compound, different line and colored according to FactorC (one compound per panel) 
 
-ggplot(data=pdat, mapping=aes(x = FactorB, y = uM, group=FactorC, color = FactorC)) +
+g <- ggplot(data=datSamples, mapping=aes(x = ParameterB, y = uM, group=FactorC, color = FactorC)) +
   ggtitle("Treatment") +
   geom_point(size = 3) +
   geom_line(size=0.8)  +
-  scale_colour_brewer(palette = "Set1") +
+  #scale_colour_brewer(palette = "Set1") +
   theme_grey(base_size = 10) +
-  facet_wrap(~LipidName, scales="free") +
+  facet_wrap(~Compound, scales="free") +
   aes(ymin=0) +
   #geom_errorbar(aes(ymax = meanConc + SDfmol, ymin=meanConc - SDfmol), width=1)  +
   #geom_smooth(method='lm', se = FALSE, level=0.95)
@@ -243,7 +260,7 @@ ggplot(data=pdat, mapping=aes(x = FactorB, y = uM, group=FactorC, color = Factor
 # Plot retention time of all compounds in all samples
 # --------------------------------------------------
  
-datSelected = datSamples %>%filter(SampleType %in% c("BLANK"))    
+#datSelected = datSamples %>%filter(SampleType %in% c("BLANK"))    
        
 ggplot(data=datSelected, mapping=aes(x = SampleName, y = RT, color = SampleType)) +
   ggtitle("Retention Time") +
