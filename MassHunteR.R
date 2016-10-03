@@ -25,13 +25,15 @@
 # CONSTANTS
 #--------------------------------------------------------
 #
-# Consants used to calculate the concentrations later on
+# Calculate concentrations based on spiked of ISTD (CUSTOMIZE to your data)...
+# ToDo: Transfer these info to seperate input files
 ISTD_VOL = 50 # uL
 SAMPLE_VOL = 5 # uL
 
 # Constants used to split the data and perform statistical analysis (t.test so far)
+# ToDo : Make these more flexible (different numbers of parameters as needed)
 expGrp = c("ParameterA", "ParameterB", "ParameterC")
-filterParameterA = c("Pred")
+filterParameterA = c("ACTH") #Vector include any value
 #
 ####################################################################################################################
 
@@ -137,14 +139,6 @@ dat[,SampleType:=ifelse(grepl("QC", SampleName), "QC", ifelse(grepl("BLK", Sampl
 #dat <- dat %>% 
 #  mutate(SampleType=ifelse(grepl("QC", SampleName), "QC", ifelse(grepl("BLK", SampleName), "BLANK", "Sample")))
 
-
-# Calculate concentrations based on spiked of ISTD (CUSTOMIZE to your data)...
-# ToDo: Transfer these info to seperate input files
-#ISTD_CONC = 20 # ng/mL
-#ISTD_MW = 383.47 # g mol-1
-ISTD_VOL = 50 # uL
-SAMPLE_VOL = 5 # uL
-
 # Functions to calculate the concentrations and then add them to dat
 # Each function takes an entire row from dat as input
 uMValue <- function(row){
@@ -196,35 +190,44 @@ datSamples$ParameterA <- as.factor(datSamples$ParameterA)
 # ------------------------------------------
 
 #### Work in progress....
-# Calculate average and SD of all replicates
-datSelected <- datSamples %>% group_by(Compound, ParameterA, ParameterB) %>% 
-  summarise(meanNormArea=mean(NormArea), SDNormarea = sd(NormArea), meanuM=mean(uM), SDuM = sd(uM), nArea = n())
-#datSelected[,n := .N, by=list(Compound,ParameterB)]
-# Calculate t tests...  
-# ! Don't think this works yet...  
-    
-# Filter for specific FactorA values
-#datSelected <- datSelected %>% filter(ParameterA %in% filterParameterA)
 
-# function to calculate t-test using sample statistics instead of an actual dataset
-tTestWithStatistics <- function(mean, sd, n, mu=0){
-  (mean-mu)/(sd/sqrt(n))
+# Wrapper function for t.test p-value which returns NA instead of an error if the data is invalid
+# e.g. insufficient data points now return NA instead of throwing an error
+# Function by Tony Plate at https://stat.ethz.ch/pipermail/r-help/2008-February/154167.html
+my.t.test.p.value <- function(...) {
+    obj<-try(t.test(...), silent=TRUE)
+    if (is(obj, "try-error")) return(NA) else return(obj$p.value)
 }
 
-#datSelected <- datSelected %>% mutate(tTestValue = tTestWithStatistics(meanNormArea, SDNormarea, nArea))
-#datSelected <- datSelected %>% mutate (pValue = 2*pt(tTestValue,nArea-1))
+
+#function to calculate p-value given dataframe from a single group
+pValueFromGroup <- function(data){
+  bValues <- unique(data$ParameterB)
+  if(!(length(bValues==2))){
+    stop("length(bValues)!=2")
+  }
+  dat1 <- data[data$ParameterB==bValues[1],]
+  dat2 <- data[data$ParameterB==bValues[2],]
+  pValue <- my.t.test.p.value(dat1$NormArea,dat2$NormArea)
+  #pValue <- t.test(dat1$NormArea,dat2$NormArea)$p.value
+  temp <<- temp+1
+  pValue
+}
+
+temp=0
 
 meanNormArea <- datSamples %>% filter(ParameterA %in% filterParameterA) %>%
-  group_by(Compound,ParameterB) %>%
-  summarise_each(funs(function(x)t.test(x)$p.value), vars=NormArea)
-#meanNormArea[,.(pValue:=t.test(meanNormArea)$p.value),by=.(Compound,ParameterB)]
+  filter(NormArea!=1)
+  #group_by(Compound,ParameterB) #%>%
+pVal <- by(meanNormArea, as.factor(meanNormArea$Compound),pValueFromGroup, simplify = TRUE)
 
+# Calculate average and SD of all replicates
+datSelected <- datSamples %>% group_by(Compound, ParameterA, ParameterB) %>% 
+  summarise(meanNormArea=mean(NormArea), SDNormarea = sd(NormArea), meanuM=mean(uM), SDuM = sd(uM), nArea = n()) %>%
+  filter(ParameterA %in% filterParameterA) %>%
+  filter(meanNormArea!=1) %>%
+  mutate(pValue = pVal[[Compound]])
 
-#setkey(meanNormArea,Compound,ParameterB)
-#meanNormArea[,tTestNormMean := (t.test(NormArea)$p.value), by=.(Compound,ParameterB)]
-#meanNormArea[,tTestNormMean := t.test(NormArea),by=list(Compound,ParameterB)]
-#meanNormArea <- meanNormArea %>% summarise_each(funs(function(x) t.test(x)$p.value), vars=meanNormArea)
-#meanNormArea <- meanNormArea %>%  summarise_each(funs(t.test), vars = NormArea)
 #### ......
 
     
