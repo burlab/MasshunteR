@@ -259,8 +259,6 @@ g <- ggplot(data=datSamples, mapping=aes(x = ParameterB, y = uM, group=FactorC, 
       
 # Plot retention time of all compounds in all samples
 # --------------------------------------------------
- 
-#datSelected = datSamples %>%filter(SampleType %in% c("BLANK"))    
        
 ggplot(data=datSelected, mapping=aes(x = SampleName, y = RT, color = SampleType)) +
   ggtitle("Retention Time") +
@@ -284,8 +282,34 @@ ggplot(data=datSelected, mapping=aes(x = SampleName, y = RT, color = SampleType)
 # Plot peak areas of compounds in all QC samples
 # --------------------------------------------------     
 
+datQC <- dat[SampleType=="QC"]
+
+QCplot <- ggplot(data=datQC, mapping=aes(x=AcqTime,y=NormArea, group=1)) +
+  ggtitle("Peak Areas of QC samples") +
+  geom_point(size=0.8) +
+  geom_line(size=1) +
+  scale_y_log10() +
+  facet_wrap(~Compound) +
+  xlab("AcqTime") +
+  ylab("Peak Areas") +
+  theme(axis.text.x=element_blank()) +
+  ggsave("QCplot.png",width=30,height=30) 
+#print(QCplot)
+
 
 # Plot peak areas of ISTDs in all samples, colored by sampleType
 # --------------------------------------------------------------     
-            
 
+datISTD <- dat[grepl("(IS)",Compound),]         
+
+ISTDplot <- ggplot(data=datISTD, mapping=aes(x=AcqTime,y=NormArea,color=SampleType, group=1))+
+  ggtitle("Peak ares of ISTDs in all samples") +
+  geom_point(size=0.8) +
+  geom_line(size=1) +
+  scale_y_log10() +
+  facet_wrap(~Compound) +
+  xlab("AcqTime") +
+  ylab("Peak Areas") +
+  theme(axis.text.x=element_blank()) +
+  ggsave("ISTDplot.png",width=30,height=30)
+#print(ISTDplot)
