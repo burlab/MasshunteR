@@ -210,11 +210,8 @@ pValueFromGroup <- function(data){
   dat2 <- data[data$ParameterB==bValues[2],]
   pValue <- my.t.test.p.value(dat1$NormArea,dat2$NormArea)
   #pValue <- t.test(dat1$NormArea,dat2$NormArea)$p.value
-  temp <<- temp+1
   pValue
 }
-
-temp=0
 
 meanNormArea <- datSamples %>% filter(ParameterA %in% filterParameterA) %>%
   filter(NormArea!=1)
