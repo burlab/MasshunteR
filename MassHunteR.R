@@ -42,6 +42,7 @@ filterParameterA = c("ACTH") #Vector include any value
 #setwd("D:/Bo/Data/RawData/LCMS/GL08D_StabilityTests")
 setwd("D://Adithya//Sample data")
 
+library(broom)
 library(tidyr)
 library(dplyr)
 library(dtplyr)
@@ -109,25 +110,40 @@ dat <- dat %>%
   mutate(SampleType=factor(ifelse(grepl("PQC", SampleName), "PQC", ifelse(grepl("TQC", SampleName), "TQC", ifelse(grepl("BLANK", SampleName), "BLANK", "Sample"))))) 
 
 # add the ISTD data to the dataset
-dat <- dat %>% mutate(ISTD = sapply(Compound,function(y) mapISTD[which(y == mapISTD$Compound),2])) 
+dat1 <- dat %>% mutate(ISTD = sapply(Compound,function(y) mapISTD[which(y == mapISTD$Compound),2]))
 
 # Function which takes a compound and returns it's normalised area
 # input is a complete row from the data frame
 normalise <- function(row){
-    compo <- trimws(row[["Compound"]])
-    fileName <- row[["SampleFileName"]]
-    istd <- row[["ISTD"]]
-    compArea <- as.numeric(row[["Area"]])
-    istdArea <- as.numeric(dat[dat$SampleFileName == fileName & dat$Compound == istd,][["Area"]])
-    normalisedArea <- compArea / istdArea
-    normalisedArea
+  compo <- trimws(row[["Compound"]])
+  fileName <- row[["SampleFileName"]]
+  istd <- row[["ISTD"]]
+  compArea <- as.numeric(row[["Area"]])
+  istdArea <- as.numeric(dat[dat$SampleFileName == fileName & dat$Compound == istd,][["Area"]])
+  normalisedArea <- compArea / istdArea
+  normalisedArea
 }
 
 # Normalises the data and adds the result to a new column
 Rprof(line.profiling = TRUE)
-#x <- apply(dat,1, normalise)
-dat <- as.data.table(dat)
-dat[,NormArea := apply(dat,1,normalise)] #can improve with lapply and rowwise()
+dat <- as.data.table(dat) %>% rowwise() 
+dat1 <- as.data.table(dat1)
+#dat2 <- dat1[,NormArea := apply(dat1,1,normalise)] #can improve with lapply and rowwise()
+dat_norm <- dat  %>% #group_by(SampleFileName) %>% 
+  left_join(mapISTD[,c("Compound","ISTD")], by="Compound", copy=TRUE) %>%
+  #group_by(ISTD) %>% 
+  mutate(isISTD = (Compound %in% ISTD)) %>% group_by(SampleFileName) 
+
+ISTDTable <- dat_norm[dat_norm$isISTD==TRUE,]
+print("x")
+#dat_norm <- dat_norm %>%
+#  mutate(ISTDArea = list(mapply(function(x,y) ISTDTable[which(x==ISTDTable$Compound&y==ISTDTable$SampleFileName),][["Area"]],dat_norm$ISTD,dat_norm$SampleFileName)))
+dat_norm <- dat_norm %>%
+  mutate(ISTDArea = do(ISTDTable[which(.$ISTD==ISTDTable$Compound&.$SampleFileName==ISTDTable$SampleFileName),][["Area"]]))
+print("y")
+
+
+#dat_norm <- dat_norm %>% mutate(ISTDArea = mapply(function(x,y)dat_norm[dat_norm$Compound==x&dat_norm$SampleFileName==y,][["Area"]],ISTD,SampleFileName))
 #dat <- mutate(dat, NormArea = apply(dat,1,normalise))
 Rprof(NULL)
 
@@ -183,8 +199,8 @@ datSamples$ParameterA <- gsub("^.*?_","",datSamples[[4]])
 
 # necessary? (can this be made flexible, in case there are more factors, e.g. using col indices?)   
 datSamples$ParameterA <- as.factor(datSamples$ParameterA)
-datSamples$ParameterA <- as.factor(datSamples$ParameterA)
-datSamples$ParameterA <- as.factor(datSamples$ParameterA)
+datSamples$ParameterB <- as.factor(datSamples$ParameterB)
+datSamples$ParameterC <- as.factor(datSamples$ParameterC)
 
 # Basic statistics: mean +/- SD, t Test...
 # ------------------------------------------
@@ -195,7 +211,7 @@ datSamples$ParameterA <- as.factor(datSamples$ParameterA)
 # e.g. insufficient data points now return NA instead of throwing an error
 # Function by Tony Plate at https://stat.ethz.ch/pipermail/r-help/2008-February/154167.html
 my.t.test.p.value <- function(...) {
-    obj<-try(t.test(...), silent=TRUE)
+    obj<-try(t.test(...,paired=TRUE), silent=TRUE)
     if (is(obj, "try-error")) return(NA) else return(obj$p.value)
 }
 
@@ -217,6 +233,14 @@ meanNormArea <- datSamples %>% filter(ParameterA %in% filterParameterA) %>%
   filter(NormArea!=1)
   #group_by(Compound,ParameterB) #%>%
 pVal <- by(meanNormArea, as.factor(meanNormArea$Compound),pValueFromGroup, simplify = TRUE)
+
+datFiltered <- datSamples %>% 
+  filter(ParameterA %in% filterParameterA) %>%
+  filter(grep("LPC 20:1",Compound)) %>%
+  filter(NormArea!=1) %>%
+  droplevels() %>%
+  group_by(Compound) %>%
+  do(tidy(t.test(uM~ParameterB,data=., paired=TRUE)))
 
 # Calculate average and SD of all replicates
 datSelected <- datSamples %>% group_by(Compound, ParameterA, ParameterB) %>% 
@@ -284,12 +308,12 @@ ggplot(data=datSelected, mapping=aes(x = SampleName, y = RT, color = SampleType)
 
 datQC <- dat[SampleType=="QC"]
 
-QCplot <- ggplot(data=datQC, mapping=aes(x=AcqTime,y=NormArea, group=1)) +
+QCplot <- ggplot(data=datQC, mapping=aes(x=AcqTime,y=NormArea, group=1, ymin=0)) +
   ggtitle("Peak Areas of QC samples") +
   geom_point(size=0.8) +
   geom_line(size=1) +
-  scale_y_log10() +
-  facet_wrap(~Compound) +
+  #scale_y_log10() +
+  facet_wrap(~Compound, scales="free") +
   xlab("AcqTime") +
   ylab("Peak Areas") +
   theme(axis.text.x=element_blank()) +
@@ -302,12 +326,12 @@ QCplot <- ggplot(data=datQC, mapping=aes(x=AcqTime,y=NormArea, group=1)) +
 
 datISTD <- dat[grepl("(IS)",Compound),]         
 
-ISTDplot <- ggplot(data=datISTD, mapping=aes(x=AcqTime,y=NormArea,color=SampleType, group=1))+
+ISTDplot <- ggplot(data=datISTD, mapping=aes(x=AcqTime,y=NormArea,color=SampleType, group=1, ymin=0))+
   ggtitle("Peak ares of ISTDs in all samples") +
   geom_point(size=0.8) +
   geom_line(size=1) +
   scale_y_log10() +
-  facet_wrap(~Compound) +
+  facet_wrap(~Compound, scales="free") +
   xlab("AcqTime") +
   ylab("Peak Areas") +
   theme(axis.text.x=element_blank()) +
