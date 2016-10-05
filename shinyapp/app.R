@@ -38,7 +38,7 @@ library(xlsx)
 ui <- shinyUI(fluidPage(
    
    # Application title
-   titlePanel("Old Faithful Geyser Data"),
+   titlePanel("masshunteR"),
    
    # Sidebar with a slider input for number of bins 
    sidebarLayout(
@@ -50,7 +50,10 @@ ui <- shinyUI(fluidPage(
       
       # Show a plot of the generated distribution
       mainPanel(
-        downloadButton("Download")
+        verbatimTextOutput("Status"),
+        downloadButton("DownloadData", "DownloadData"),
+        downloadButton("DownloadQC", "DownloadQC"),
+        downloadButton("DownloadISTD", "DownloadISTD")
       )
    )
 ))
@@ -60,6 +63,9 @@ server <- shinyServer(function(input, output) {
    
    observeEvent(input$Submit,
                 {
+                  output$Status <- renderText("processing")
+                  #output$Status <- renderText("Processing")
+                print("Processing")
                 #datWide <- read.csv("20160615_Pred_ACTH_Original_Data.csv", header = FALSE, sep = ",", na.strings=c("#N/A", "NULL"), check.names=FALSE, as.is=TRUE, strip.white=TRUE )
                 #mapISTD <- read.csv("CompoundISTDList_SLING-PL-Panel_V1.csv", header = TRUE, sep = ",", check.names=TRUE, as.is=TRUE, strip.white = TRUE)
                 #ISTDDetails <- read.xlsx("ISTD-map-conc_SLING-PL-Panel_V1.xlsx", sheetIndex = 2)
@@ -257,13 +263,63 @@ server <- shinyServer(function(input, output) {
                   mutate(pValue = pVal[[Compound]])
                 print("done")
                 print("test")
-                output$Download <- downloadHandler(
+                output$DownloadData <- downloadHandler(
                   filename='data.csv',
                   content=function(file) {
                     write.csv(datSelected, file)
                   }
                 )
-                })
+                # Plot peak areas of compounds in all QC samples
+                # --------------------------------------------------     
+                
+                datQC <- dat[SampleType=="QC"]
+                
+                QCplot <- ggplot(data=datQC, mapping=aes(x=AcqTime,y=NormArea, group=1, ymin=0)) +
+                  ggtitle("Peak Areas of QC samples") +
+                  geom_point(size=0.8) +
+                  geom_line(size=1) +
+                  #scale_y_log10() +
+                  facet_wrap(~Compound, scales="free") +
+                  xlab("AcqTime") +
+                  ylab("Peak Areas") +
+                  theme(axis.text.x=element_blank())# +
+                  #ggsave("QCplot.png",width=30,height=30) 
+                output$DownloadQC <- downloadHandler(
+                  filename='QCplot.png',
+                  content=function(file){
+                    QCplot + ggsave(file,width=30,height=30)
+                  }
+                )
+                
+                
+                # Plot peak areas of ISTDs in all samples, colored by sampleType
+                # --------------------------------------------------------------     
+                
+                datISTD <- dat[grepl("(IS)",Compound),]         
+                
+                ISTDplot <- ggplot(data=datISTD, mapping=aes(x=AcqTime,y=NormArea,color=SampleType, group=1, ymin=0))+
+                  ggtitle("Peak ares of ISTDs in all samples") +
+                  geom_point(size=0.8) +
+                  geom_line(size=1) +
+                  scale_y_log10() +
+                  facet_wrap(~Compound, scales="free") +
+                  xlab("AcqTime") +
+                  ylab("Peak Areas") +
+                  theme(axis.text.x=element_blank()) #+
+                  #ggsave("ISTDplot.png",width=30,height=30)
+                output$DownloadISTD <- downloadHandler(
+                  filename='ISTDplot.png',
+                  content=function(file){
+                    ISTDplot + ggsave(file,width=30,height=30)
+                  }
+                )
+                
+                
+                
+                print("finished")
+                output$Status <- renderText("finished")
+                }
+   )
 })
 
 # Run the application 
