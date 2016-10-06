@@ -72,6 +72,7 @@ server <- shinyServer(function(input, output) {
                 datWide <- read.csv(input$mainInput$datapath, header=FALSE, sep=",", na.strings=c("#N/A", "NULL"), check.names=FALSE, as.is=TRUE, strip.white=TRUE)
                 mapISTD <- read.csv(input$ISTDMapping$datapath, header = TRUE, sep = ",", check.names=TRUE, as.is=TRUE, strip.white = TRUE)  
                 ISTDDetails <- read.xlsx(input$ISTDConc$datapath, sheetIndex = 2)
+                #ISTDDetails <- read.csv(input$ISTDConc$datapath)
                 ISTDDetails$ISTD <- trimws(ISTDDetails$ISTD)
                 
                 datWide[1,] <- lapply(datWide[1,],function(y) gsub(" Results","",y))
@@ -287,7 +288,7 @@ server <- shinyServer(function(input, output) {
                 output$DownloadQC <- downloadHandler(
                   filename='QCplot.png',
                   content=function(file){
-                    QCplot + ggsave(file,width=30,height=30)
+                    QCplot + ggsave(file,plot=QCplot,width=30,height=30)
                   }
                 )
                 
@@ -295,13 +296,14 @@ server <- shinyServer(function(input, output) {
                 # Plot peak areas of ISTDs in all samples, colored by sampleType
                 # --------------------------------------------------------------     
                 
+                
                 datISTD <- dat[grepl("(IS)",Compound),]         
                 
                 ISTDplot <- ggplot(data=datISTD, mapping=aes(x=AcqTime,y=NormArea,color=SampleType, group=1, ymin=0))+
                   ggtitle("Peak ares of ISTDs in all samples") +
                   geom_point(size=0.8) +
                   geom_line(size=1) +
-                  scale_y_log10() +
+                  #scale_y_log10() +
                   facet_wrap(~Compound, scales="free") +
                   xlab("AcqTime") +
                   ylab("Peak Areas") +
@@ -310,7 +312,7 @@ server <- shinyServer(function(input, output) {
                 output$DownloadISTD <- downloadHandler(
                   filename='ISTDplot.png',
                   content=function(file){
-                    ISTDplot + ggsave(file,width=30,height=30)
+                    ISTDplot + ggsave(file, plot=ISTDplot, width=30,height=30)
                   }
                 )
                 
