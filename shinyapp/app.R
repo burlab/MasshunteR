@@ -46,14 +46,18 @@ ui <- shinyUI(fluidPage(
          fileInput("mainInput", "mainINPUT"),
          fileInput("ISTDMapping", "ISTDMapping"),
          fileInput("ISTDConc", "ISTDConc"),
-         actionButton("Submit", "Submit")),
+         actionButton("Submit", "Submit"),
+         verbatimTextOutput("Status"),
+         downloadButton("DownloadData", "DownloadData"),
+         downloadButton("DownloadISTD", "DownloadISTD"),
+         downloadButton("DownloadQC", "DownloadQC")),
       
       # Show a plot of the generated distribution
       mainPanel(
-        verbatimTextOutput("Status"),
-        downloadButton("DownloadData", "DownloadData"),
-        downloadButton("DownloadQC", "DownloadQC"),
-        downloadButton("DownloadISTD", "DownloadISTD")
+        selectInput("QCorISTD", "QC or ISTD", choices=list("QC" = 1, "ISTD" = 2)),
+        htmlOutput("selectCompound"),
+        plotOutput("plot")
+        
       )
    )
 ))
@@ -288,7 +292,7 @@ server <- shinyServer(function(input, output) {
                 output$DownloadQC <- downloadHandler(
                   filename='QCplot.png',
                   content=function(file){
-                    QCplot + ggsave(file,plot=QCplot,width=30,height=30)
+                    ggsave(file,plot=QCplot,width=30,height=30)
                   }
                 )
                 
@@ -312,16 +316,27 @@ server <- shinyServer(function(input, output) {
                 output$DownloadISTD <- downloadHandler(
                   filename='ISTDplot.png',
                   content=function(file){
-                    ISTDplot + ggsave(file, plot=ISTDplot, width=30,height=30)
+                    ggsave(file, plot=ISTDplot, width=30,height=30)
                   }
                 )
                 
                 
-                
                 print("finished")
                 output$Status <- renderText("finished")
+                output$plot <- renderPlot({
+                  if(input$QCorISTD==1){
+                    plotData <- QCplot
+                    data <- datQC
+                  } else {
+                    plotData <- ISTDplot
+                    data <- datISTD
+                  }
+                  print(plotData)
+                })
                 }
    )
+  
+
 })
 
 # Run the application 
