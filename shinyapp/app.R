@@ -25,6 +25,8 @@ filterParameterA = c("ACTH") #Vector include any value
 ####################################################################################################################
 
 library(shiny)
+library(artyfarty)
+library(highcharter)
 library(broom)
 library(tidyr)
 library(dplyr)
@@ -55,7 +57,9 @@ ui <- shinyUI(fluidPage(
       # Show a plot of the generated distribution
       mainPanel(
         selectInput("QCorISTD", "QC or ISTD", choices=list("QC" = 1, "ISTD" = 2)),
-        htmlOutput("selectCompound"),
+        uiOutput("selectCompound"),
+        actionButton("plotGraph", "Plot Graph"),
+        highchartOutput("compoundPlot"),
         plotOutput("plot")
         
       )
@@ -326,15 +330,38 @@ server <- shinyServer(function(input, output) {
                 output$plot <- renderPlot({
                   if(input$QCorISTD==1){
                     plotData <- QCplot
-                    data <- datQC
+                    data1 <<- datQC
                   } else {
                     plotData <- ISTDplot
-                    data <- datISTD
+                    data1 <<- datISTD
                   }
+                  output$selectCompound <- renderUI({
+                    selectInput("CompoundList", "Select Compound", unique(data1$Compound))
+                  })
                   print(plotData)
                 })
+                
+                
                 }
    )
+  output$compoundPlot <- renderHighchart({
+    input$plotGraph
+    isolate(
+      data1 <- data1[data1$Compound==input$CompoundList,]
+    )
+    
+#    g <- ggplot(data1, mapping=aes(x=AcqTime,y=NormArea, group=1, ymin=0))+
+#      ggtitle("Peak ares of ISTDs in all samples") +
+#      geom_point(size=0.8) +
+#      geom_line(size=1) +
+#      theme_scientific() +
+#      #scale_y_log10() +
+#      #facet_wrap(~Compound, scales="free") +
+#      xlab("AcqTime") +
+#      ylab("Peak Areas") +
+#      theme(axis.text.x=element_blank())
+    print(g)
+  })
   
 
 })
