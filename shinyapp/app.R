@@ -59,7 +59,7 @@ ui <- shinyUI(fluidPage(
         selectInput("QCorISTD", "QC or ISTD", choices=list("QC" = 1, "ISTD" = 2)),
         uiOutput("selectCompound"),
         actionButton("plotGraph", "Plot Graph"),
-        highchartOutput("compoundPlot"),
+        plotOutput("compoundPlot"),
         plotOutput("plot")
         
       )
@@ -344,23 +344,26 @@ server <- shinyServer(function(input, output) {
                 
                 }
    )
-  output$compoundPlot <- renderHighchart({
+  output$compoundPlot <- renderPlot({
     input$plotGraph
     isolate(
       data1 <- data1[data1$Compound==input$CompoundList,]
     )
     
-#    g <- ggplot(data1, mapping=aes(x=AcqTime,y=NormArea, group=1, ymin=0))+
-#      ggtitle("Peak ares of ISTDs in all samples") +
-#      geom_point(size=0.8) +
-#      geom_line(size=1) +
-#      theme_scientific() +
-#      #scale_y_log10() +
-#      #facet_wrap(~Compound, scales="free") +
-#      xlab("AcqTime") +
-#      ylab("Peak Areas") +
-#      theme(axis.text.x=element_blank())
-    print(g)
+    g1 <- ggplot(data1, mapping=aes(x=AcqTime,y=NormArea, group=1, ymin=0))+
+      ggtitle("Peak ares of ISTDs in all samples") +
+      geom_point(size=0.8) +
+      geom_line(size=1) +
+      theme_scientific() +
+      #scale_y_log10() +
+      #facet_wrap(~Compound, scales="free") +
+      xlab("AcqTime") +
+      ylab("Peak Areas") +
+      theme(axis.text.x=element_blank())
+    if(input$QCorISTD==2){
+      g1 <- g1 + aes(color=SampleType)
+    }
+    print(g1)
   })
   
 
