@@ -58,7 +58,6 @@ ui <- shinyUI(fluidPage(
       mainPanel(
         selectInput("QCorISTD", "QC or ISTD", choices=list("QC" = 1, "ISTD" = 2)),
         uiOutput("selectCompound"),
-        actionButton("plotGraph", "Plot Graph"),
         plotOutput("compoundPlot"),
         plotOutput("plot")
         
@@ -135,8 +134,10 @@ server <- shinyServer(function(input, output, session) {
                 Rprof(line.profiling = TRUE)
                 dat <- as.data.table(dat)
                 print("x")
-                dat <- dat  %>% group_by(SampleFileName) %>% left_join(mapISTD[,c("Compound","ISTD")], by="Compound", copy=TRUE) %>% 
-                  mutate(isISTD = (Compound %in% ISTD)) %>% mutate(NormArea = Area/Area[isISTD])
+                dat <- dat  %>% group_by(SampleFileName) %>% left_join(mapISTD[,c("Compound","ISTD")], by="Compound", copy=TRUE)# %>% 
+                dat <- dat %>% mutate(isISTD = (Compound %in% ISTD)) %>%  group_by(ISTD) %>% mutate(NormArea = Area/Area[isISTD])
+                View(dat)
+                print(paste(dat$NormArea,dat$ISTD))
                 Rprof(NULL)
                 print("y")
                 # Groups the data for later processing
@@ -310,30 +311,47 @@ server <- shinyServer(function(input, output, session) {
                   print(plotData)
                 })
                 
-                
+                output$compoundPlot <- renderPlot({
+                  data1 <- data1[data1$Compound==input$CompoundList,]
+
+                g1 <- ggplot(data1, mapping=aes(x=AcqTime,y=NormArea, group=1, ymin=0))+
+                  ggtitle("Peak ares of ISTDs in all samples") +
+                  geom_point(size=0.8) +
+                  geom_line(size=1) +
+                  theme_scientific() +
+                  #scale_y_log10() +
+                  #facet_wrap(~Compound, scales="free") +
+                  xlab("AcqTime") +
+                  ylab("Peak Areas") +
+                  theme(axis.text.x=element_blank())
+                if(input$QCorISTD!=1){
+                  g1 <- g1 + aes(color=SampleType)
+                }
+                print(g1)
+                })
                 }
    )
-  output$compoundPlot <- renderPlot({
-    input$plotGraph
-    isolate(
-      data1 <- data1[data1$Compound==input$CompoundList,]
-    )
-    
-    g1 <- ggplot(data1, mapping=aes(x=AcqTime,y=NormArea, group=1, ymin=0))+
-      ggtitle("Peak ares of ISTDs in all samples") +
-      geom_point(size=0.8) +
-      geom_line(size=1) +
-      theme_scientific() +
-      #scale_y_log10() +
-      #facet_wrap(~Compound, scales="free") +
-      xlab("AcqTime") +
-      ylab("Peak Areas") +
-      theme(axis.text.x=element_blank())
-    if(input$QCorISTD!=1){
-      g1 <- g1 + aes(color=SampleType)
-    }
-    print(g1)
-  })
+#  output$compoundPlot <- renderPlot({
+#    input$plotGraph
+#    isolate(
+#      data1 <- data1[data1$Compound==input$CompoundList,]
+#    )
+#    
+#    g1 <- ggplot(data1, mapping=aes(x=AcqTime,y=NormArea, group=1, ymin=0))+
+#      ggtitle("Peak ares of ISTDs in all samples") +
+#      geom_point(size=0.8) +
+#      geom_line(size=1) +
+#      theme_scientific() +
+#      #scale_y_log10() +
+#      #facet_wrap(~Compound, scales="free") +
+#      xlab("AcqTime") +
+#      ylab("Peak Areas") +
+#      theme(axis.text.x=element_blank())
+#    if(input$QCorISTD!=1){
+#      g1 <- g1 + aes(color=SampleType)
+#    }
+#    print(g1)
+#  })
   
 
 })
