@@ -67,11 +67,11 @@ ui <- shinyUI(fluidPage(
 ))
 
 # Define server logic required to draw a histogram
-server <- shinyServer(function(input, output) {
-   
+server <- shinyServer(function(input, output, session) {
+  session$onSessionEnded(stopApp)
    observeEvent(input$Submit,
                 {
-                  output$Status <- renderText("processing")
+                  output$Status <- renderText({"processing"})
                   #output$Status <- renderText("Processing")
                 print("Processing")
                 #datWide <- read.csv("20160615_Pred_ACTH_Original_Data.csv", header = FALSE, sep = ",", na.strings=c("#N/A", "NULL"), check.names=FALSE, as.is=TRUE, strip.white=TRUE )
@@ -131,41 +131,12 @@ server <- shinyServer(function(input, output) {
                 dat <- dat %>% 
                   mutate(SampleType=factor(ifelse(grepl("PQC", SampleName), "PQC", ifelse(grepl("TQC", SampleName), "TQC", ifelse(grepl("BLANK", SampleName), "BLANK", "Sample"))))) 
                 
-                # add the ISTD data to the dataset
-                dat <- dat %>% mutate(ISTD = sapply(Compound,function(y) mapISTD[which(y == mapISTD$Compound),2]))
-                
-                # Function which takes a compound and returns it's normalised area
-                # input is a complete row from the data frame
-                normalise <- function(row){
-                  compo <- trimws(row[["Compound"]])
-                  fileName <- row[["SampleFileName"]]
-                  istd <- row[["ISTD"]]
-                  compArea <- as.numeric(row[["Area"]])
-                  istdArea <- as.numeric(dat[dat$SampleFileName == fileName & dat$Compound == istd,][["Area"]])
-                  normalisedArea <- compArea / istdArea
-                  normalisedArea
-                }
-                
                 # Normalises the data and adds the result to a new column
                 Rprof(line.profiling = TRUE)
-                dat <- as.data.table(dat)# %>% rowwise() 
-                #dat1 <- as.data.table(dat1)
-                #dat2 <- dat1[,NormArea := apply(dat1,1,normalise)] #can improve with lapply and rowwise()
-                #dat_norm <- dat  %>% #group_by(SampleFileName) %>% 
-                #  left_join(mapISTD[,c("Compound","ISTD")], by="Compound", copy=TRUE) %>%
-                  #group_by(ISTD) %>% 
-                #  mutate(isISTD = (Compound %in% ISTD)) %>% group_by(SampleFileName) 
-                
-                #STDTable <- dat_norm[dat_norm$isISTD==TRUE,]
+                dat <- as.data.table(dat)
                 print("x")
-                #dat_norm <- dat_norm %>%
-                #  mutate(ISTDArea = list(mapply(function(x,y) ISTDTable[which(x==ISTDTable$Compound&y==ISTDTable$SampleFileName),][["Area"]],dat_norm$ISTD,dat_norm$SampleFileName)))
-                #dat_norm <- dat_norm %>%
-                #  mutate(ISTDArea = do(ISTDTable[which(.$ISTD==ISTDTable$Compound&.$SampleFileName==ISTDTable$SampleFileName),][["Area"]]))
-                
-                
-                #dat_norm <- dat_norm %>% mutate(ISTDArea = mapply(function(x,y)dat_norm[dat_norm$Compound==x&dat_norm$SampleFileName==y,][["Area"]],ISTD,SampleFileName))
-                dat <- mutate(dat, NormArea = apply(dat,1,normalise))
+                dat <- dat  %>% group_by(SampleFileName) %>% left_join(mapISTD[,c("Compound","ISTD")], by="Compound", copy=TRUE) %>% 
+                  mutate(isISTD = (Compound %in% ISTD)) %>% mutate(NormArea = Area/Area[isISTD])
                 Rprof(NULL)
                 print("y")
                 # Groups the data for later processing
@@ -174,8 +145,6 @@ server <- shinyServer(function(input, output) {
                 print("a")
                 # Guess sample type of all runs
                 dat[,SampleType:=ifelse(grepl("QC", SampleName), "QC", ifelse(grepl("BLK", SampleName), "BLANK", "Sample"))]
-                #dat <- dat %>% 
-                #  mutate(SampleType=ifelse(grepl("QC", SampleName), "QC", ifelse(grepl("BLK", SampleName), "BLANK", "Sample")))
                 print("z")
                 # Functions to calculate the concentrations and then add them to dat
                 # Each function takes an entire row from dat as input
@@ -254,7 +223,7 @@ server <- shinyServer(function(input, output) {
                 meanNormArea <- datSamples %>% filter(ParameterA %in% filterParameterA) %>%
                   filter(NormArea!=1)
                 #group_by(Compound,ParameterB) #%>%
-                pVal <- by(meanNormArea, as.factor(meanNormArea$Compound),pValueFromGroup, simplify = TRUE)
+                #pVal <- by(meanNormArea, as.factor(meanNormArea$Compound),pValueFromGroup, simplify = TRUE)
                 
                 #datFiltered <- datSamples %>% 
                 #  filter(ParameterA %in% filterParameterA) %>%
@@ -268,8 +237,8 @@ server <- shinyServer(function(input, output) {
                 datSelected <- datSamples %>% group_by(Compound, ParameterA, ParameterB) %>% 
                   summarise(meanNormArea=mean(NormArea), SDNormarea = sd(NormArea), meanuM=mean(uM), SDuM = sd(uM), nArea = n()) %>%
                   filter(ParameterA %in% filterParameterA) %>%
-                  filter(meanNormArea!=1) %>%
-                  mutate(pValue = pVal[[Compound]])
+                  filter(meanNormArea!=1)# %>%
+                #  mutate(pValue = pVal[[Compound]])
                 print("done")
                 print("test")
                 output$DownloadData <- downloadHandler(
@@ -360,7 +329,7 @@ server <- shinyServer(function(input, output) {
       xlab("AcqTime") +
       ylab("Peak Areas") +
       theme(axis.text.x=element_blank())
-    if(input$QCorISTD==2){
+    if(input$QCorISTD!=1){
       g1 <- g1 + aes(color=SampleType)
     }
     print(g1)
