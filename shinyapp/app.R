@@ -24,6 +24,7 @@ filterParameterA = c("ACTH") #Vector include any value
 #
 ####################################################################################################################
 
+library(plotly)
 library(shiny)
 library(artyfarty)
 library(highcharter)
@@ -58,8 +59,9 @@ ui <- shinyUI(fluidPage(
       mainPanel(
         checkboxGroupInput("QCorSample", "QC or Sample", c("All", "QC","Sample"), selected = "All"),
         radioButtons("ISTDyesorno", "ISTD?",c("All", "OnlyISTD", "NoISTD")),
+        checkboxGroupInput("Variable", "Variable", c("Normalised Area", "Area", "Retention Time"), selected="Normalised Area"),
         uiOutput("selectCompound"),
-        plotOutput("compoundPlot")
+        plotlyOutput("compoundPlot")
         
       )
    )
@@ -78,8 +80,8 @@ server <- shinyServer(function(input, output, session) {
                 #ISTDDetails <- read.xlsx("ISTD-map-conc_SLING-PL-Panel_V1.xlsx", sheetIndex = 2)
                 datWide <- read.csv(input$mainInput$datapath, header=FALSE, sep=",", na.strings=c("#N/A", "NULL"), check.names=FALSE, as.is=TRUE, strip.white=TRUE)
                 mapISTD <- read.csv(input$ISTDMapping$datapath, header = TRUE, sep = ",", check.names=TRUE, as.is=TRUE, strip.white = TRUE)  
-                ISTDDetails <- read.xlsx(input$ISTDConc$datapath, sheetIndex = 2)
-                #ISTDDetails <- read.csv(input$ISTDConc$datapath)
+                #ISTDDetails <- read.xlsx(input$ISTDConc$datapath, sheetIndex = 2)
+                ISTDDetails <- read.csv(input$ISTDConc$datapath)
                 ISTDDetails$ISTD <- trimws(ISTDDetails$ISTD)
                 
                 dat <- tidyData(datWide)
@@ -241,7 +243,7 @@ server <- shinyServer(function(input, output, session) {
 #                  print(plotData)
 #                })
                 
-                output$compoundPlot <- renderPlot({
+                output$compoundPlot <- renderPlotly({
                   data1 <- dat[dat$Compound==input$CompoundList,]
                   if("All" %in% input$QCorSample){
                   }else if("QC" %in% input$QCorSample & "Sample" %in% input$QCorSample){
@@ -254,9 +256,9 @@ server <- shinyServer(function(input, output, session) {
                   View(data1)
                   updateSelectInput(session, "selectCompound", "Select Compound", unique(data1$Compound))
 
-                g1 <- ggplot(data1, mapping=aes(x=AcqTime,y=NormArea, group=1, ymin=0, color=SampleType))+
+                g1 <- ggplot(data1, mapping=aes(x=AcqTime))+
                   #ggtitle("Peak ares of ISTDs in all samples") +
-                  geom_point(size=5) +
+                  #geom_point(size=5) +
                   #geom_line(size=1) +
                   aes(ymin=0)+ 
                   #theme_scientific() +
@@ -265,7 +267,16 @@ server <- shinyServer(function(input, output, session) {
                   xlab("AcqTime") +
                   ylab("Peak Areas") +
                   theme(axis.text.x=element_blank())
-                print(g1)
+                if("Area" %in% input$Variable){
+                  g1 <- g1 + geom_point(aes(y = Area), size=3)
+                } 
+                if("Normalised Area" %in% input$Variable){
+                  g1 <- g1 + geom_point(aes(y = NormArea), size=3)
+                }
+                if("Retention Time" %in% input$Variable){
+                  g1 <- g1 + geom_point(aes(y = RT), size=3)
+                }
+                ggplotly(g1)
                 })
                 }
    )
