@@ -56,10 +56,10 @@ ui <- shinyUI(fluidPage(
       
       # Show a plot of the generated distribution
       mainPanel(
-        selectInput("QCorISTD", "QC or ISTD", choices=list("QC" = 1, "ISTD" = 2)),
+        checkboxGroupInput("QCorSample", "QC or Sample", c("All", "QC","Sample"), selected = "All"),
+        radioButtons("ISTDyesorno", "ISTD?",c("All", "OnlyISTD", "NoISTD")),
         uiOutput("selectCompound"),
-        plotOutput("compoundPlot"),
-        plotOutput("plot")
+        plotOutput("compoundPlot")
         
       )
    )
@@ -82,94 +82,10 @@ server <- shinyServer(function(input, output, session) {
                 #ISTDDetails <- read.csv(input$ISTDConc$datapath)
                 ISTDDetails$ISTD <- trimws(ISTDDetails$ISTD)
                 
-                datWide[1,] <- lapply(datWide[1,],function(y) gsub(" Results","",y))
-                if(datWide[2,2]=="" & !is.na(datWide[2,2])){
-                  datWide[2,2] <- "a"
-                  count = 6
-                } else {
-                  count = 5
-                }
+                dat <- tidyData(datWide)
                 
-                # Fill in compound name in empty columns (different parameters of the same compound)
-                for(c in 1:ncol(datWide)){
-                  val = datWide[1,c]
-                  if((!is.na(val)) && nchar(val,keepNA = TRUE) > 0 ){
-                    colname=val
-                  } else {
-                    datWide[1,c]=colname
-                  }
-                }
+                dat <- normaliseData(dat, mapISTD, ISTDDetails)
                 
-                # Concatenate rows containing parameters + compounds to the form parameter.compound for conversion with reshape() 
-                datWide[1,] <- paste(datWide[2,], datWide[1,],sep = ".")
-                colnames(datWide) <- datWide[1, ]
-                datWide = datWide[-1:-2,]
-                
-                # Replace column header names and remove columns that are not needed or not informative 
-                setnames(datWide, old=c(".Sample","Data File.Sample", "Name.Sample", "Acq. Date-Time.Sample", "Type.Sample"), new=c("QuantWarning","SampleFileName","SampleName", "AcqTime", "SampleTypeMethod"))
-                datWide = datWide[, !names(datWide) %in% c("NA.Sample","Level.Sample")]
-                
-                # Transform wide to long (tidy) table format
-                datLong=reshape(datWide,idvar = "SampleFileName", varying = colnames(datWide[,-1:-count]), direction = "long",sep = "." )
-                row.names(datLong) <- NULL
-                setnames(datLong, old=c("time"), new=c("Compound"))
-                
-                # Covert to data.table object and change column types
-                dat <- dplyr::tbl_df(datLong)
-                datWide <- dplyr::tbl_df(datWide)
-                numCol <- c("RT","Area","Height", "FWHM")
-                dat[, names(dat) %in% numCol] <- lapply(dat[,names(dat) %in% numCol], as.numeric)
-                factCol <- c("QuantWarning","SampleName","SampleFileName","SampleTypeMethod")
-                dat[, names(dat) %in% factCol] <- lapply(dat[,names(dat) %in% factCol], as.factor)
-                dat$Compound <- trimws(dat$Compound)
-                ###################################################################################################################
-                # ISTD normalization and calculation of absolute concentrations
-                ###################################################################################################################
-                
-                # Try to guess sample type based on sample file name
-                dat <- dat %>% 
-                  mutate(SampleType=factor(ifelse(grepl("PQC", SampleName), "PQC", ifelse(grepl("TQC", SampleName), "TQC", ifelse(grepl("BLANK", SampleName), "BLANK", "Sample"))))) 
-                
-                # Normalises the data and adds the result to a new column
-                Rprof(line.profiling = TRUE)
-                dat <- as.data.table(dat)
-                print("x")
-                dat <- dat  %>% group_by(SampleFileName) %>% left_join(mapISTD[,c("Compound","ISTD")], by="Compound", copy=TRUE)# %>% 
-                dat <- dat %>% mutate(isISTD = (Compound %in% ISTD)) %>%  group_by(ISTD) %>% mutate(NormArea = Area/Area[isISTD])
-                View(dat)
-                print(paste(dat$NormArea,dat$ISTD))
-                Rprof(NULL)
-                print("y")
-                # Groups the data for later processing
-                dat <- dat %>% group_by(SampleFileName)
-                #debug()
-                print("a")
-                # Guess sample type of all runs
-                dat[,SampleType:=ifelse(grepl("QC", SampleName), "QC", ifelse(grepl("BLK", SampleName), "BLANK", "Sample"))]
-                print("z")
-                # Functions to calculate the concentrations and then add them to dat
-                # Each function takes an entire row from dat as input
-                uMValue <- function(row){
-                  istd <- row[["ISTD"]]
-                  ISTD_CONC <- ISTDDetails[ISTDDetails$ISTD==istd,"ISTDconcNGML"]
-                  ISTD_MW <- ISTDDetails[ISTDDetails$ISTD==istd,"ISTD_MW"]
-                  normalisedArea <- row[["NormArea"]]
-                  umVal <- (as.numeric(normalisedArea)   * (ISTD_VOL/1000 * ISTD_CONC/ISTD_MW*1000) / SAMPLE_VOL * 1000)/1000
-                  umVal
-                }
-                
-                ngmlValue <- function(row){
-                  istd <- row[["ISTD"]]
-                  ISTD_CONC <- ISTDDetails[ISTDDetails$ISTD==istd,"ISTDconcNGML"]
-                  ISTD_MW <- ISTDDetails[ISTDDetails$ISTD==istd,"ISTD_MW"]
-                  normalisedArea <- row[["NormArea"]]
-                  ngmlVal <- as.numeric(normalisedArea)   * (ISTD_VOL/1000 * ISTD_CONC) / SAMPLE_VOL * 1000
-                  ngmlVal
-                }
-                
-                # <- mutate(dat, uM = uMValue(ISTD,NormArea))
-                dat[,uM := apply(dat,1,uMValue)]
-                dat[,ngml := apply(dat,1,ngmlValue)]
                 
                 
                 ###############################
@@ -275,7 +191,8 @@ server <- shinyServer(function(input, output, session) {
                 # --------------------------------------------------------------     
                 
                 
-                datISTD <- dat[grepl("(IS)",Compound),]         
+                datISTD <- dat[grepl("(IS)",Compound),] 
+                datISTD
                 
                 ISTDplot <- ggplot(data=datISTD, mapping=aes(x=AcqTime,y=NormArea,color=SampleType, group=1, ymin=0))+
                   ggtitle("Peak ares of ISTDs in all samples") +
@@ -295,43 +212,164 @@ server <- shinyServer(function(input, output, session) {
                 )
                 
                 
+                output$selectCompound <- renderUI({
+                  
+                  if(input$ISTDyesorno=="OnlyISTD"){
+                    dat <- dat[dat$isISTD,]
+                    View(dat)
+                  } else if(input$ISTDyesorno=="NoISTD"){
+                    dat <- dat[!(dat$isISTD),]
+                  } else if(input$ISTDyesorno=="All"){
+                  }
+                                    selectInput("CompoundList", "Select Compound", unique(dat$Compound))
+                                    })
                 print("finished")
                 output$Status <- renderText("finished")
-                output$plot <- renderPlot({
-                  if(input$QCorISTD==1){
-                    plotData <- QCplot
-                    data1 <<- datQC
-                  } else {
-                    plotData <- ISTDplot
-                    data1 <<- datISTD
-                  }
-                  output$selectCompound <- renderUI({
-                    selectInput("CompoundList", "Select Compound", unique(data1$Compound))
-                  })
-                  print(plotData)
-                })
+
+## NOT NEEDED ANYMORE?                
+#               output$plot <- renderPlot({
+#                  if(input$QCorISTD==1){
+#                    plotData <- QCplot
+#                    data1 <<- datQC
+#                  } else {
+#                    plotData <- ISTDplot
+#                    data1 <<- datISTD
+#                  }
+#                  output$selectCompound <- renderUI({
+#                    selectInput("CompoundList", "Select Compound", unique(data1$Compound))
+#                  })
+#                  print(plotData)
+#                })
                 
                 output$compoundPlot <- renderPlot({
-                  data1 <- data1[data1$Compound==input$CompoundList,]
+                  data1 <- dat[dat$Compound==input$CompoundList,]
+                  if("All" %in% input$QCorSample){
+                  }else if("QC" %in% input$QCorSample & "Sample" %in% input$QCorSample){
+                    data1 <- data1[data1$SampleType=="QC"|data1$SampleType=="Sample",]
+                  } else if(input$QCorSample=="QC"){
+                    data1 <- data1[data1$SampleType=="QC",]
+                  } else if(input$QCorSample=="Sample"){
+                    data1 <- data1[data1$SampleType=="Sample",]
+                  }
+                  View(data1)
+                  updateSelectInput(session, "selectCompound", "Select Compound", unique(data1$Compound))
 
-                g1 <- ggplot(data1, mapping=aes(x=AcqTime,y=NormArea, group=1, ymin=0))+
-                  ggtitle("Peak ares of ISTDs in all samples") +
-                  geom_point(size=0.8) +
-                  geom_line(size=1) +
-                  theme_scientific() +
+                g1 <- ggplot(data1, mapping=aes(x=AcqTime,y=NormArea, group=1, ymin=0, color=SampleType))+
+                  #ggtitle("Peak ares of ISTDs in all samples") +
+                  geom_point(size=5) +
+                  #geom_line(size=1) +
+                  aes(ymin=0)+ 
+                  #theme_scientific() +
                   #scale_y_log10() +
                   #facet_wrap(~Compound, scales="free") +
                   xlab("AcqTime") +
                   ylab("Peak Areas") +
                   theme(axis.text.x=element_blank())
-                if(input$QCorISTD!=1){
-                  g1 <- g1 + aes(color=SampleType)
-                }
                 print(g1)
                 })
                 }
    )
 })
+
+# Function which takes the rawdata (wide data) and returns a tidy dataset(long data)
+# This function is just a wrapper for the first part of the original logic 
+tidyData <- function(rawDat){
+  rawDat[1,] <- lapply(rawDat[1,],function(y) gsub(" Results","",y))
+  if(rawDat[2,2]=="" & !is.na(rawDat[2,2])){
+    rawDat[2,2] <- "a"
+    count = 6
+  } else {
+    count = 5
+  }
+  
+  # Fill in compound name in empty columns (different parameters of the same compound)
+  for(c in 1:ncol(rawDat)){
+    val = rawDat[1,c]
+    if((!is.na(val)) && nchar(val,keepNA = TRUE) > 0 ){
+      colname=val
+    } else {
+      rawDat[1,c]=colname
+    }
+  }
+  
+  # Concatenate rows containing parameters + compounds to the form parameter.compound for conversion with reshape() 
+  rawDat[1,] <- paste(rawDat[2,], rawDat[1,],sep = ".")
+  colnames(rawDat) <- rawDat[1, ]
+  rawDat = rawDat[-1:-2,]
+  
+  # Replace column header names and remove columns that are not needed or not informative 
+  setnames(rawDat, old=c(".Sample","Data File.Sample", "Name.Sample", "Acq. Date-Time.Sample", "Type.Sample"), new=c("QuantWarning","SampleFileName","SampleName", "AcqTime", "SampleTypeMethod"))
+  rawDat = rawDat[, !names(rawDat) %in% c("NA.Sample","Level.Sample")]
+  
+  # Transform wide to long (tidy) table format
+  datLong=reshape(rawDat,idvar = "SampleFileName", varying = colnames(rawDat[,-1:-count]), direction = "long",sep = "." )
+  row.names(datLong) <- NULL
+  setnames(datLong, old=c("time"), new=c("Compound"))
+  
+  # Covert to data.table object and change column types
+  dat <- dplyr::tbl_df(datLong)
+  rawDat <- dplyr::tbl_df(rawDat)
+  numCol <- c("RT","Area","Height", "FWHM")
+  dat[, names(dat) %in% numCol] <- lapply(dat[,names(dat) %in% numCol], as.numeric)
+  factCol <- c("QuantWarning","SampleName","SampleFileName","SampleTypeMethod")
+  dat[, names(dat) %in% factCol] <- lapply(dat[,names(dat) %in% factCol], as.factor)
+  dat$Compound <- trimws(dat$Compound)
+  
+  return(dat)
+}
+
+# Function which takes the tidy data and calculates the Normalised area, uM and ngML
+# This function is just a wrapper for the relevant code in the original logic
+normaliseData <- function(longData, ISTDMapping, ISTDDetails){
+  ###################################################################################################################
+  # ISTD normalization and calculation of absolute concentrations
+  ###################################################################################################################
+  
+  # Try to guess sample type based on sample file name
+  longData <- longData %>% 
+    mutate(SampleType=factor(ifelse(grepl("PQC", SampleName), "PQC", ifelse(grepl("TQC", SampleName), "TQC", ifelse(grepl("BLANK", SampleName), "BLANK", "Sample"))))) 
+  
+  # Normalises the data and adds the result to a new column
+  Rprof(line.profiling = TRUE)
+  longData <- as.data.table(longData)
+  print("x")
+  longData <- longData  %>% group_by(SampleFileName) %>% left_join(ISTDMapping[,c("Compound","ISTD")], by="Compound", copy=TRUE)# %>% 
+  longData <- longData %>% mutate(isISTD = (Compound %in% ISTD)) %>%  group_by(ISTD) %>% mutate(NormArea = Area/Area[isISTD])
+  #View(longData)
+  #print(paste(longData$NormArea,longData$ISTD))
+  Rprof(NULL)
+  print("y")
+  # Groups the data for later processing
+  longData <- longData %>% group_by(SampleFileName)
+  #debug()
+  print("a")
+  # Guess sample type of all runs
+  longData[,SampleType:=ifelse(grepl("QC", SampleName), "QC", ifelse(grepl("BLK", SampleName), "BLANK", "Sample"))]
+  print("z")
+  # Functions to calculate the concentrations and then add them to dat
+  # Each function takes an entire row from dat as input
+  uMValue <- function(row){
+    istd <- row[["ISTD"]]
+    ISTD_CONC <- ISTDDetails[ISTDDetails$ISTD==istd,"ISTDconcNGML"]
+    ISTD_MW <- ISTDDetails[ISTDDetails$ISTD==istd,"ISTD_MW"]
+    normalisedArea <- row[["NormArea"]]
+    umVal <- (as.numeric(normalisedArea)   * (ISTD_VOL/1000 * ISTD_CONC/ISTD_MW*1000) / SAMPLE_VOL * 1000)/1000
+    umVal
+  }
+  
+  ngmlValue <- function(row){
+    istd <- row[["ISTD"]]
+    ISTD_CONC <- ISTDDetails[ISTDDetails$ISTD==istd,"ISTDconcNGML"]
+    ISTD_MW <- ISTDDetails[ISTDDetails$ISTD==istd,"ISTD_MW"]
+    normalisedArea <- row[["NormArea"]]
+    ngmlVal <- as.numeric(normalisedArea)   * (ISTD_VOL/1000 * ISTD_CONC) / SAMPLE_VOL * 1000
+    ngmlVal
+  }
+  
+  # <- mutate(dat, uM = uMValue(ISTD,NormArea))
+  longData[,uM := apply(longData,1,uMValue)]
+  longData[,ngml := apply(longData,1,ngmlValue)]
+}
 
 # Run the application 
 shinyApp(ui = ui, server = server)
