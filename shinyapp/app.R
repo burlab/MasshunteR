@@ -24,6 +24,7 @@ filterParameterA = c("ACTH") #Vector include any value
 #
 ####################################################################################################################
 
+library(reshape)
 library(plotly)
 library(shiny)
 library(artyfarty)
@@ -53,15 +54,15 @@ ui <- shinyUI(fluidPage(
          verbatimTextOutput("Status"),
          downloadButton("DownloadData", "DownloadData"),
          downloadButton("DownloadISTD", "DownloadISTD"),
-         downloadButton("DownloadQC", "DownloadQC")),
+         downloadButton("DownloadQC", "DownloadQC"),
+         width = 3),
       
       # Show a plot of the generated distribution
       mainPanel(
         checkboxGroupInput("QCorSample", "QC or Sample", c("All", "QC","Sample"), selected = "All"),
         radioButtons("ISTDyesorno", "ISTD?",c("All", "OnlyISTD", "NoISTD")),
-        checkboxGroupInput("Variable", "Variable", c("Normalised Area", "Area", "Retention Time"), selected="Normalised Area"),
         uiOutput("selectCompound"),
-        plotlyOutput("compoundPlot")
+        plotlyOutput("compoundPlot", height="600px")
         
       )
    )
@@ -223,10 +224,14 @@ server <- shinyServer(function(input, output, session) {
                     dat <- dat[!(dat$isISTD),]
                   } else if(input$ISTDyesorno=="All"){
                   }
-                                    selectInput("CompoundList", "Select Compound", unique(dat$Compound))
-                                    })
+                  selectInput("CompoundList", "Select Compound", unique(dat$Compound))
+                })
+                
+                
                 print("finished")
                 output$Status <- renderText("finished")
+                
+                
                 
                 output$compoundPlot <- renderPlotly({
                   data1 <- dat[dat$Compound==input$CompoundList,]
@@ -238,31 +243,16 @@ server <- shinyServer(function(input, output, session) {
                   } else if(input$QCorSample=="Sample"){
                     data1 <- data1[data1$SampleType=="Sample",]
                   }
-
-                g1 <- ggplot(data1, mapping=aes(x=AcqTime))+
-                  #ggtitle("Peak ares of ISTDs in all samples") +
-                  #geom_point(size=5) +
-                  #geom_line(size=1) +
-                  aes(ymin=0)+ 
-                  #theme_scientific() +
-                  #scale_y_log10() +
-                  #facet_wrap(~Compound, scales="free") +
-                  xlab("AcqTime") +
-                  #ylab("Peak Areas") +
-                  theme(axis.text.x=element_blank())
-                if("Area" %in% input$Variable){
-                  g1 <- g1 + geom_point(aes(y = Area), size=3) +
-                    ylab("Non-Normalised Peak Areas")
-                } 
-                if("Normalised Area" %in% input$Variable){
-                  g1 <- g1 + geom_point(aes(y = NormArea), size=3) +
-                    ylab("Normalised Peak Areas")
-                }
-                if("Retention Time" %in% input$Variable){
-                  g1 <- g1 + geom_point(aes(y = RT), size=3) +
-                    ylab("Retention Time")
-                }
-                ggplotly(g1)
+                  
+                  dfMelted <- melt(data1 %>% select(AcqTime, Area, NormArea, RT), id="AcqTime")
+                  dfMelted <- dfMelted %>% left_join(data1 %>% select(AcqTime, SampleType))
+                  
+                  g1 <- ggplot(dfMelted, mapping = aes(x=AcqTime, y=value, color=SampleType, ymin=0)) +
+                    geom_point(size=4) +
+                    facet_grid(variable~., scales="free") +
+                    theme(axis.text.x=element_blank())
+                  
+                  ggplotly(g1)
                 })
                 }
    )
