@@ -172,7 +172,7 @@ server <- shinyServer(function(input, output, session) {
                 datQC <- dat[SampleType=="QC"]
                 
                 QCplot <- ggplot(data=datQC, mapping=aes(x=AcqTime,y=NormArea, group=1, ymin=0)) +
-                  ggtitle("Peak Areas of QC samples") +
+                  ggtitle("Normalised Peak Areas of QC samples") +
                   geom_point(size=0.8) +
                   geom_line(size=1) +
                   #scale_y_log10() +
@@ -197,7 +197,7 @@ server <- shinyServer(function(input, output, session) {
                 datISTD
                 
                 ISTDplot <- ggplot(data=datISTD, mapping=aes(x=AcqTime,y=NormArea,color=SampleType, group=1, ymin=0))+
-                  ggtitle("Peak ares of ISTDs in all samples") +
+                  ggtitle("Normalised Peak ares of ISTDs in all samples") +
                   geom_point(size=0.8) +
                   geom_line(size=1) +
                   #scale_y_log10() +
@@ -227,21 +227,6 @@ server <- shinyServer(function(input, output, session) {
                                     })
                 print("finished")
                 output$Status <- renderText("finished")
-
-## NOT NEEDED ANYMORE?                
-#               output$plot <- renderPlot({
-#                  if(input$QCorISTD==1){
-#                    plotData <- QCplot
-#                    data1 <<- datQC
-#                  } else {
-#                    plotData <- ISTDplot
-#                    data1 <<- datISTD
-#                  }
-#                  output$selectCompound <- renderUI({
-#                    selectInput("CompoundList", "Select Compound", unique(data1$Compound))
-#                  })
-#                  print(plotData)
-#                })
                 
                 output$compoundPlot <- renderPlotly({
                   data1 <- dat[dat$Compound==input$CompoundList,]
@@ -253,8 +238,6 @@ server <- shinyServer(function(input, output, session) {
                   } else if(input$QCorSample=="Sample"){
                     data1 <- data1[data1$SampleType=="Sample",]
                   }
-                  View(data1)
-                  updateSelectInput(session, "selectCompound", "Select Compound", unique(data1$Compound))
 
                 g1 <- ggplot(data1, mapping=aes(x=AcqTime))+
                   #ggtitle("Peak ares of ISTDs in all samples") +
@@ -265,16 +248,19 @@ server <- shinyServer(function(input, output, session) {
                   #scale_y_log10() +
                   #facet_wrap(~Compound, scales="free") +
                   xlab("AcqTime") +
-                  ylab("Peak Areas") +
+                  #ylab("Peak Areas") +
                   theme(axis.text.x=element_blank())
                 if("Area" %in% input$Variable){
-                  g1 <- g1 + geom_point(aes(y = Area), size=3)
+                  g1 <- g1 + geom_point(aes(y = Area), size=3) +
+                    ylab("Non-Normalised Peak Areas")
                 } 
                 if("Normalised Area" %in% input$Variable){
-                  g1 <- g1 + geom_point(aes(y = NormArea), size=3)
+                  g1 <- g1 + geom_point(aes(y = NormArea), size=3) +
+                    ylab("Normalised Peak Areas")
                 }
                 if("Retention Time" %in% input$Variable){
-                  g1 <- g1 + geom_point(aes(y = RT), size=3)
+                  g1 <- g1 + geom_point(aes(y = RT), size=3) +
+                    ylab("Retention Time")
                 }
                 ggplotly(g1)
                 })
