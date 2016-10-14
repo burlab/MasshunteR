@@ -57,8 +57,8 @@ ui <- shinyUI(fluidPage(
          downloadButton("DownloadLongData", "Download Summarised Data"),
          downloadButton("DownloaduMData", "Download uM Data"),
          downloadButton("DownloadNormAreaData", "Download Normalised Area Data"),
-         downloadButton("DownloadISTD", "Download ISTD"),
-         downloadButton("DownloadQC", "Download QC")
+         downloadButton("DownloadISTD", "Download ISTD Plots"),
+         downloadButton("DownloadQC", "Download QC Plots")
          ),
          width = 3),
       
@@ -72,7 +72,8 @@ ui <- shinyUI(fluidPage(
           plotlyOutput("compoundPlot", height="600px")),
           tabPanel("Complete Data", DT::dataTableOutput("viewCompleteData")),
           tabPanel("Summarised Data", DT::dataTableOutput("viewSummarisedData")),
-          tabPanel("Summed Data", plotlyOutput("summedData"))
+          tabPanel("Summed Area Data", checkboxGroupInput("QCorSampleTotal", "QC or Sample", c("All", "QC", "Sample"), selected = "All"),
+                   plotlyOutput("summedData"))
         )
         
       )
@@ -96,9 +97,9 @@ server <- shinyServer(function(input, output, session) {
                 ISTDDetails <- read.csv(input$ISTDConc$datapath)
                 ISTDDetails$ISTD <- trimws(ISTDDetails$ISTD)
                 
-                dat <- tidyData(datWide)
+                datlong <- tidyData(datWide)
                 
-                dat <- normaliseData(dat, mapISTD, ISTDDetails)
+                dat <- normaliseData(datlong, mapISTD, ISTDDetails)
                 
                 
                 
@@ -166,7 +167,7 @@ server <- shinyServer(function(input, output, session) {
                 
                 # Calculate average and SD of all replicates
                 datSelected <- datSamples %>%  group_by(Compound) %>%   #group_by(Compound, ParameterA, ParameterB) %>% 
-                  summarise(meanNormArea=mean(NormArea), SDNormarea = sd(NormArea), meanuM=mean(uM), SDuM = sd(uM), number = n()) %>%
+                  summarise(meanNormArea=mean(NormArea), SDNormarea = sd(NormArea), meanuM=mean(uM), SDuM = sd(uM), number = n()) #%>%
                 #  filter(ParameterA %in% filterParameterA) %>%
                 #  filter(meanNormArea!=1)# %>%
                 #  mutate(pValue = pVal[[Compound]])
@@ -178,7 +179,8 @@ server <- shinyServer(function(input, output, session) {
                     write.csv(datSelected, file)
                   }
                 )
-                data_uM_Wide = dat %>% ungroup() %>% select(SampleFileName, Compound, uM) %>% spread(key = Compound,value = uM, drop=TRUE) 
+                data_uM_Wide <- dat %>% ungroup() %>% select(SampleFileName, SampleType, Compound, uM) %>% spread(key = Compound,value = uM, drop=TRUE) 
+                data_uM_Wide <- data_uM_Wide[,c("SampleFileName", "SampleType", as.character(unique(datlong$Compound))), with=FALSE]
                 output$DownloaduMData <- downloadHandler(
                   filename='wideuMData.csv',
                   content=function(file){
@@ -186,7 +188,8 @@ server <- shinyServer(function(input, output, session) {
                   }
                 )
                 
-                data_NormArea_Wide = dat %>% ungroup() %>% select(SampleFileName, Compound, NormArea) %>% spread(key = Compound,value = NormArea, drop=TRUE) 
+                data_NormArea_Wide <- dat %>% ungroup() %>% select(SampleFileName, SampleType, Compound, NormArea) %>% spread(key = Compound,value = NormArea, drop=TRUE) 
+                data_NormArea_Wide <- data_NormArea_Wide[,c("SampleFileName", "SampleType", as.character(unique(datlong$Compound))), with=FALSE]
                 output$DownloadNormAreaData <- downloadHandler(
                   filename = 'wideNormAreaData.csv',
                   content=function(file){
@@ -243,7 +246,6 @@ server <- shinyServer(function(input, output, session) {
                   
                   if(input$ISTDyesorno=="OnlyISTD"){
                     dat <- dat[dat$isISTD,]
-                    View(dat)
                   } else if(input$ISTDyesorno=="NoISTD"){
                     dat <- dat[!(dat$isISTD),]
                   } else if(input$ISTDyesorno=="All"){
@@ -272,7 +274,7 @@ server <- shinyServer(function(input, output, session) {
                   dfMelted <<- dfMelted %>% left_join(data1 %>% select(AcqTime, SampleType))
                   
                   g1 <- ggplot(dfMelted, mapping = aes(x=AcqTime, y=value, color=SampleType, ymin=0)) +
-                    geom_point(size=4) +
+                    geom_point(size=1) +
                     facet_grid(variable~., scales="free") +
                     theme(axis.text.x=element_blank())
                   
@@ -280,7 +282,22 @@ server <- shinyServer(function(input, output, session) {
                 })
                 
                 output$summedData <- renderPlotly({
-                  data2 <- dfMelted
+                  data2 <- dat %>% ungroup() %>% select(SampleFileName, SampleType, Compound, Area) %>% spread(key = Compound,value = Area, drop=TRUE) 
+                  data2 <- data2[,c("SampleFileName", "SampleType", as.character(unique(datlong$Compound))), with=FALSE]
+                  if("All" %in% input$QCorSampleTotal){
+                  }else if("QC" %in% input$QCorSampleTotal & "Sample" %in% input$QCorSampleTotal){
+                    data2 <- data2[data2$SampleType=="QC"|data2$SampleType=="Sample",]
+                  } else if(input$QCorSampleTotal=="QC"){
+                    data2 <- data2[data2$SampleType=="QC",]
+                  } else if(input$QCorSampleTotal=="Sample"){
+                    data2 <- data2[data2$SampleType=="Sample",]
+                  }
+                  data2$sumArea <- rowSums(select(data2, -c(SampleFileName,SampleType)))
+                  g2 <- ggplot(data2, aes(SampleFileName, sumArea, color=SampleType)) +
+                    geom_point(size=1) +
+                    ylab("Total IM Count") +
+                    theme(axis.text.x=element_blank())
+                  ggplotly(g2)
                 })
                 
                 output$viewCompleteData <- DT::renderDataTable({as.data.table(dat)}, options=list(pageLength=25))
