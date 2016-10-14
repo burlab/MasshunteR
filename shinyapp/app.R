@@ -104,7 +104,7 @@ server <- shinyServer(function(input, output, session) {
                 # Assuming 3 factors... (can this be made flexible, assuming all samples names are consistent?)
                 #expGrp = c("FactorA", "FactorB", "FactorC")
                 
-                datSamples <- dat %>% filter(SampleType =="Sample")  
+                datSamples <- dat #%>% filter(SampleType =="Sample")  
                 datSamples <- separate(datSamples,col = SampleName, into = expGrp, convert=TRUE, remove=FALSE, sep ="-")
                 datSamples$ParameterA <- gsub("^.*?_","",datSamples[[4]])
                 
@@ -154,10 +154,10 @@ server <- shinyServer(function(input, output, session) {
                 #  do(tidy(t.test(uM~ParameterB,data=., paired=TRUE)))
                 
                 # Calculate average and SD of all replicates
-                datSelected <- datSamples %>% group_by(Compound, ParameterA, ParameterB) %>% 
-                  summarise(meanNormArea=mean(NormArea), SDNormarea = sd(NormArea), meanuM=mean(uM), SDuM = sd(uM), nArea = n()) %>%
-                  filter(ParameterA %in% filterParameterA) %>%
-                  filter(meanNormArea!=1)# %>%
+                datSelected <- datSamples %>%  group_by(Compound) %>%   #group_by(Compound, ParameterA, ParameterB) %>% 
+                  summarise(meanNormArea=mean(NormArea), SDNormarea = sd(NormArea), meanuM=mean(uM), SDuM = sd(uM), number = n()) %>%
+                #  filter(ParameterA %in% filterParameterA) %>%
+                #  filter(meanNormArea!=1)# %>%
                 #  mutate(pValue = pVal[[Compound]])
                 print("done")
                 print("test")
