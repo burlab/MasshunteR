@@ -54,9 +54,11 @@ ui <- shinyUI(fluidPage(
          actionButton("Submit", "Submit"),
          verbatimTextOutput("Status"),
          verticalLayout(
-         downloadButton("DownloadData", "DownloadData"),
-         downloadButton("DownloadISTD", "DownloadISTD"),
-         downloadButton("DownloadQC", "DownloadQC")
+         downloadButton("DownloadLongData", "Download Summarised Data"),
+         downloadButton("DownloaduMData", "Download uM Data"),
+         downloadButton("DownloadNormAreaData", "Download Normalised Area Data"),
+         downloadButton("DownloadISTD", "Download ISTD"),
+         downloadButton("DownloadQC", "Download QC")
          ),
          width = 3),
       
@@ -69,7 +71,8 @@ ui <- shinyUI(fluidPage(
           uiOutput("selectCompound"),
           plotlyOutput("compoundPlot", height="600px")),
           tabPanel("Complete Data", DT::dataTableOutput("viewCompleteData")),
-          tabPanel("Summarised Data", DT::dataTableOutput("viewSummarisedData"))
+          tabPanel("Summarised Data", DT::dataTableOutput("viewSummarisedData")),
+          tabPanel("Summed Data", plotlyOutput("summedData"))
         )
         
       )
@@ -169,10 +172,25 @@ server <- shinyServer(function(input, output, session) {
                 #  mutate(pValue = pVal[[Compound]])
                 print("done")
                 print("test")
-                output$DownloadData <- downloadHandler(
-                  filename='data.csv',
+                output$DownloadLongData <- downloadHandler(
+                  filename='summarisedData.csv',
                   content=function(file) {
                     write.csv(datSelected, file)
+                  }
+                )
+                data_uM_Wide = dat %>% ungroup() %>% select(SampleFileName, Compound, uM) %>% spread(key = Compound,value = uM, drop=TRUE) 
+                output$DownloaduMData <- downloadHandler(
+                  filename='wideuMData.csv',
+                  content=function(file){
+                    write.csv(data_uM_Wide, file)
+                  }
+                )
+                
+                data_NormArea_Wide = dat %>% ungroup() %>% select(SampleFileName, Compound, NormArea) %>% spread(key = Compound,value = NormArea, drop=TRUE) 
+                output$DownloadNormAreaData <- downloadHandler(
+                  filename = 'wideNormAreaData.csv',
+                  content=function(file){
+                    write.csv(data_NormArea_Wide, file)
                   }
                 )
                 # Plot peak areas of compounds in all QC samples
@@ -201,9 +219,7 @@ server <- shinyServer(function(input, output, session) {
                 # Plot peak areas of ISTDs in all samples, colored by sampleType
                 # --------------------------------------------------------------     
                 
-                
-                datISTD <- dat[grepl("(IS)",Compound),] 
-                datISTD
+                datISTD <- dat[dat$isISTD,]
                 
                 ISTDplot <- ggplot(data=datISTD, mapping=aes(x=AcqTime,y=NormArea,color=SampleType, group=1, ymin=0))+
                   ggtitle("Normalised Peak ares of ISTDs in all samples") +
@@ -218,7 +234,7 @@ server <- shinyServer(function(input, output, session) {
                 output$DownloadISTD <- downloadHandler(
                   filename='ISTDplot.png',
                   content=function(file){
-                    ggsave(file, plot=ISTDplot, width=30,height=30)
+                    ggsave(file, plot=ISTDplot)
                   }
                 )
                 
@@ -252,8 +268,8 @@ server <- shinyServer(function(input, output, session) {
                     data1 <- data1[data1$SampleType=="Sample",]
                   }
                   
-                  dfMelted <- melt(data1 %>% select(AcqTime, Area, NormArea, RT), id="AcqTime")
-                  dfMelted <- dfMelted %>% left_join(data1 %>% select(AcqTime, SampleType))
+                  dfMelted <<- melt(data1 %>% select(AcqTime, Area, NormArea, RT), id="AcqTime")
+                  dfMelted <<- dfMelted %>% left_join(data1 %>% select(AcqTime, SampleType))
                   
                   g1 <- ggplot(dfMelted, mapping = aes(x=AcqTime, y=value, color=SampleType, ymin=0)) +
                     geom_point(size=4) +
@@ -261,6 +277,10 @@ server <- shinyServer(function(input, output, session) {
                     theme(axis.text.x=element_blank())
                   
                   ggplotly(g1)
+                })
+                
+                output$summedData <- renderPlotly({
+                  data2 <- dfMelted
                 })
                 
                 output$viewCompleteData <- DT::renderDataTable({as.data.table(dat)}, options=list(pageLength=25))
