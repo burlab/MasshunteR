@@ -37,6 +37,7 @@ library(ggplot2)
 library(data.table)
 library(RColorBrewer)
 library(xlsx)
+library(DT)
 
 # Define UI for application that draws a histogram
 ui <- shinyUI(fluidPage(
@@ -52,17 +53,24 @@ ui <- shinyUI(fluidPage(
          fileInput("ISTDConc", "ISTDConc"),
          actionButton("Submit", "Submit"),
          verbatimTextOutput("Status"),
+         verticalLayout(
          downloadButton("DownloadData", "DownloadData"),
          downloadButton("DownloadISTD", "DownloadISTD"),
-         downloadButton("DownloadQC", "DownloadQC"),
+         downloadButton("DownloadQC", "DownloadQC")
+         ),
          width = 3),
       
       # Show a plot of the generated distribution
       mainPanel(
-        checkboxGroupInput("QCorSample", "QC or Sample", c("All", "QC","Sample"), selected = "All"),
-        radioButtons("ISTDyesorno", "ISTD?",c("All", "OnlyISTD", "NoISTD")),
-        uiOutput("selectCompound"),
-        plotlyOutput("compoundPlot", height="600px")
+        tabsetPanel(
+          tabPanel("Plots",
+          checkboxGroupInput("QCorSample", "QC or Sample", c("All", "QC","Sample"), selected = "All"),
+          radioButtons("ISTDyesorno", "ISTD?",c("All", "OnlyISTD", "NoISTD")),
+          uiOutput("selectCompound"),
+          plotlyOutput("compoundPlot", height="600px")),
+          tabPanel("Complete Data", DT::dataTableOutput("viewCompleteData")),
+          tabPanel("Summarised Data", DT::dataTableOutput("viewSummarisedData"))
+        )
         
       )
    )
@@ -254,6 +262,10 @@ server <- shinyServer(function(input, output, session) {
                   
                   ggplotly(g1)
                 })
+                
+                output$viewCompleteData <- DT::renderDataTable({as.data.table(dat)}, options=list(pageLength=25))
+                
+                output$viewSummarisedData <- DT::renderDataTable({as.data.table(datSelected)}, options=list(pageLength=25))
                 }
    )
 })
