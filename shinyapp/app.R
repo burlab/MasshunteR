@@ -27,8 +27,6 @@ filterParameterA = c("ACTH") #Vector include any value
 library(reshape)
 library(plotly)
 library(shiny)
-library(artyfarty)
-library(highcharter)
 library(broom)
 library(tidyr)
 library(dplyr)
@@ -36,7 +34,6 @@ library(dtplyr)
 library(ggplot2)
 library(data.table)
 library(RColorBrewer)
-library(xlsx)
 library(DT)
 
 # Define UI for application that draws a histogram
@@ -70,10 +67,14 @@ ui <- shinyUI(fluidPage(
           radioButtons("ISTDyesorno", "ISTD?",c("All", "OnlyISTD", "NoISTD")),
           uiOutput("selectCompound"),
           plotlyOutput("compoundPlot", height="600px")),
-          tabPanel("Complete Data", DT::dataTableOutput("viewCompleteData")),
-          tabPanel("Summarised Data", DT::dataTableOutput("viewSummarisedData")),
           tabPanel("Total ion Count", checkboxGroupInput("QCorSampleTotal", "QC or Sample", c("All", "QC", "Sample"), selected = "All"),
-                   plotlyOutput("summedData"))
+                   plotlyOutput("summedData")),
+          tabPanel("FWHM", checkboxGroupInput("QCorSampleFWHM", "QC or Sample", c("All", "QC", "Sample"), selected = "All"),
+                   radioButtons("ISTDyesornoFWHM", "ISTD?", c("All", "OnlyISTD", "NOISTD")),
+                   uiOutput("selectCompoundFWHM"),
+                   plotlyOutput("FWHMData")),
+          tabPanel("Summarised Data", DT::dataTableOutput("viewSummarisedData")),
+          tabPanel("Complete Data", DT::dataTableOutput("viewCompleteData"))
         )
         
       )
@@ -253,10 +254,36 @@ server <- shinyServer(function(input, output, session) {
                   selectInput("CompoundList", "Select Compound", unique(dat$Compound))
                 })
                 
+                output$selectCompoundFWHM <- renderUI({
+                  if(input$ISTDyesornoFWHM=="OnlyISTD"){
+                    dat <- dat[dat$isISTD,]
+                  } else if(input$ISTDyesornoFWHM=="NoISTD"){
+                    dat <- dat[!(dat$isISTD),]
+                  } else if(input$ISTDyesornoFWHM=="All"){
+                  }
+                  selectInput("CompoundListFWHM", "Select Compound", unique(dat$Compound))
+                })
+                
                 
                 print("finished")
                 output$Status <- renderText("finished")
                 
+                output$FWHMData <- renderPlotly({
+                  data1 <- dat[dat$Compound==input$CompoundListFWHM,]
+                  if("All" %in% input$QCorSampleFWHM){
+                  } else if("QC" %in% input$QCorSampleFWHM & "Sample" %in% input$QCorSampleFWHM){
+                    data1 <- data1[data1$SampleType=="QC"|data1$SampleType=="Sample",]
+                  } else if(input$QCorSampleFWHM=="QC"){
+                    data1 <- data1[data1$SampleType=="QC",]
+                  } else if(input$QCorSampleFWHM=="Sample"){
+                    data1 <- data1[data1$SampleType=="Sample",]
+                  }
+                  View(data1)
+                  g <- ggplot(data1, aes(AcqTime, FWHM, color=SampleType, ymin=0)) +
+                    geom_point(size=1.3) +
+                    theme(axis.text.x=element_blank())
+                  ggplotly(g)
+                })
                 
                 
                 output$compoundPlot <- renderPlotly({
@@ -307,7 +334,7 @@ server <- shinyServer(function(input, output, session) {
                   }
                   data2$sumArea <- rowSums(select(data2, -c(SampleFileName,SampleType)))
                   g2 <- ggplot(data2, aes(SampleFileName, sumArea, color=SampleType)) +
-                    geom_point(size=3) +
+                    geom_point(size=2) +
                     ylab("Total ion Count") +
                     theme(axis.text.x=element_blank())
                   ggplotly(g2)
