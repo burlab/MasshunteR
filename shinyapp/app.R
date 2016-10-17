@@ -63,15 +63,18 @@ ui <- shinyUI(fluidPage(
       mainPanel(
         tabsetPanel(
           tabPanel("Plots",
-          checkboxGroupInput("QCorSample", "QC or Sample", c("All", "QC","Sample"), selected = "All"),
-          radioButtons("ISTDyesorno", "ISTD?",c("All", "OnlyISTD", "NoISTD")),
-          uiOutput("selectCompound"),
-          plotlyOutput("compoundPlot", height="600px")),
+                   splitLayout(
+                  checkboxGroupInput("QCorSample", "QC or Sample", c("All", "QC","Sample"), selected = "All"),
+                  radioButtons("ISTDyesorno", "ISTD?",c("All", "OnlyISTD", "NoISTD")),
+                  uiOutput("selectCompound")),
+                  plotlyOutput("compoundPlot", height="600px")),
           tabPanel("Total ion Count", checkboxGroupInput("QCorSampleTotal", "QC or Sample", c("All", "QC", "Sample"), selected = "All"),
                    plotlyOutput("summedData")),
-          tabPanel("FWHM", checkboxGroupInput("QCorSampleFWHM", "QC or Sample", c("All", "QC", "Sample"), selected = "All"),
+          tabPanel("FWHM", 
+                   splitLayout(
+                   checkboxGroupInput("QCorSampleFWHM", "QC or Sample", c("All", "QC", "Sample"), selected = "All"),
                    radioButtons("ISTDyesornoFWHM", "ISTD?", c("All", "OnlyISTD", "NOISTD")),
-                   uiOutput("selectCompoundFWHM"),
+                   uiOutput("selectCompoundFWHM")),
                    plotlyOutput("FWHMData")),
           tabPanel("Summarised Data", DT::dataTableOutput("viewSummarisedData")),
           tabPanel("Complete Data", DT::dataTableOutput("viewCompleteData"))
@@ -251,7 +254,7 @@ server <- shinyServer(function(input, output, session) {
                     dat <- dat[!(dat$isISTD),]
                   } else if(input$ISTDyesorno=="All"){
                   }
-                  selectInput("CompoundList", "Select Compound", unique(dat$Compound))
+                  selectInput("CompoundList", "Select Compound", unique(dat$Compound), selectize = FALSE, size = 10)
                 })
                 
                 output$selectCompoundFWHM <- renderUI({
@@ -261,7 +264,7 @@ server <- shinyServer(function(input, output, session) {
                     dat <- dat[!(dat$isISTD),]
                   } else if(input$ISTDyesornoFWHM=="All"){
                   }
-                  selectInput("CompoundListFWHM", "Select Compound", unique(dat$Compound))
+                  selectInput("CompoundListFWHM", "Select Compound", unique(dat$Compound), selectize = FALSE, size = 10)
                 })
                 
                 
