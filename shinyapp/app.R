@@ -63,7 +63,7 @@ ui <- shinyUI(fluidPage(
       mainPanel(
         tabsetPanel(
           tabPanel("Plots",
-                   splitLayout(
+                   splitLayout(cellWidths = 250,
                   checkboxGroupInput("QCorSample", "QC or Sample", c("All", "QC","Sample"), selected = "All"),
                   radioButtons("ISTDyesorno", "ISTD?",c("All", "OnlyISTD", "NoISTD")),
                   uiOutput("selectCompound")),
@@ -71,7 +71,7 @@ ui <- shinyUI(fluidPage(
           tabPanel("Total ion Count", checkboxGroupInput("QCorSampleTotal", "QC or Sample", c("All", "QC", "Sample"), selected = "All"),
                    plotlyOutput("summedData")),
           tabPanel("FWHM", 
-                   splitLayout(
+                   splitLayout(cellWidths = 250,
                    checkboxGroupInput("QCorSampleFWHM", "QC or Sample", c("All", "QC", "Sample"), selected = "All"),
                    radioButtons("ISTDyesornoFWHM", "ISTD?", c("All", "OnlyISTD", "NOISTD")),
                    uiOutput("selectCompoundFWHM")),
@@ -293,7 +293,6 @@ server <- shinyServer(function(input, output, session) {
                   data1 <- dat[dat$Compound==input$CompoundList,]
                   data2 <- data1[data1$SampleType=="QC",]
                   datMeltedQC <- data1[data1$SampleType=="QC",] 
-                  print("A")
                   datMeltedQC <- melt(datMeltedQC %>% select(AcqTime, Area, NormArea), id="AcqTime")# %>%
                   datMeltedQC <- datMeltedQC %>% left_join(data2 %>% select(AcqTime, SampleType)) %>% group_by(variable) %>% mutate(mean=mean(value), sD = sd(value))
                   if("All" %in% input$QCorSample){
@@ -308,18 +307,16 @@ server <- shinyServer(function(input, output, session) {
                   dfMelted <<- melt(data1 %>% select(AcqTime, Area, NormArea), id="AcqTime")
                   dfMelted <<- dfMelted %>% left_join(data1 %>% select(AcqTime, SampleType))
                   dfMelted <<- dfMelted %>% group_by(variable) %>% mutate(mean=mean(value), sD=sd(value), CV20Percent=(sD/mean)*100)
-                  View(dfMelted)
-                  View(datMeltedQC)
                   
                   g1 <- ggplot(dfMelted, mapping = aes(x=AcqTime, y=value, color=SampleType, ymin=0)) +
                     geom_point(size=1.3) +
                     facet_grid(variable~., scales="free") +
                     theme(axis.text.x=element_blank()) +
                     geom_hline(data=datMeltedQC, aes(yintercept=mean), size=0.1) +
-                    geom_hline(data=datMeltedQC, aes(yintercept=1.2*mean), size=0.1) +
-                    geom_hline(data=datMeltedQC, aes(yintercept=0.8*mean), size=0.1) +
-                    geom_hline(data=datMeltedQC, aes(yintercept=1.35*mean), size=0.1) +
-                    geom_hline(data=datMeltedQC, aes(yintercept=0.65*mean), size=0.1)
+                    geom_hline(data=datMeltedQC, aes(yintercept=1.2*mean), size=0.1, linetype = 2) +
+                    geom_hline(data=datMeltedQC, aes(yintercept=0.8*mean), size=0.1, linetype = 2) +
+                    geom_hline(data=datMeltedQC, aes(yintercept=1.35*mean), size=0.1, linetype = 3) +
+                    geom_hline(data=datMeltedQC, aes(yintercept=0.65*mean), size=0.1, linetype = 3)
                   
                   ggplotly(g1)
                 })
