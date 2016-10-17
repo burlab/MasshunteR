@@ -72,7 +72,7 @@ ui <- shinyUI(fluidPage(
           plotlyOutput("compoundPlot", height="600px")),
           tabPanel("Complete Data", DT::dataTableOutput("viewCompleteData")),
           tabPanel("Summarised Data", DT::dataTableOutput("viewSummarisedData")),
-          tabPanel("Summed Area Data", checkboxGroupInput("QCorSampleTotal", "QC or Sample", c("All", "QC", "Sample"), selected = "All"),
+          tabPanel("Total ion Count", checkboxGroupInput("QCorSampleTotal", "QC or Sample", c("All", "QC", "Sample"), selected = "All"),
                    plotlyOutput("summedData"))
         )
         
@@ -261,6 +261,11 @@ server <- shinyServer(function(input, output, session) {
                 
                 output$compoundPlot <- renderPlotly({
                   data1 <- dat[dat$Compound==input$CompoundList,]
+                  data2 <- data1[data1$SampleType=="QC",]
+                  datMeltedQC <- data1[data1$SampleType=="QC",] 
+                  print("A")
+                  datMeltedQC <- melt(datMeltedQC %>% select(AcqTime, Area, NormArea), id="AcqTime")# %>%
+                  datMeltedQC <- datMeltedQC %>% left_join(data2 %>% select(AcqTime, SampleType)) %>% group_by(variable) %>% mutate(mean=mean(value), sD = sd(value))
                   if("All" %in% input$QCorSample){
                   }else if("QC" %in% input$QCorSample & "Sample" %in% input$QCorSample){
                     data1 <- data1[data1$SampleType=="QC"|data1$SampleType=="Sample",]
@@ -270,13 +275,21 @@ server <- shinyServer(function(input, output, session) {
                     data1 <- data1[data1$SampleType=="Sample",]
                   }
                   
-                  dfMelted <<- melt(data1 %>% select(AcqTime, Area, NormArea, RT), id="AcqTime")
+                  dfMelted <<- melt(data1 %>% select(AcqTime, Area, NormArea), id="AcqTime")
                   dfMelted <<- dfMelted %>% left_join(data1 %>% select(AcqTime, SampleType))
+                  dfMelted <<- dfMelted %>% group_by(variable) %>% mutate(mean=mean(value), sD=sd(value), CV20Percent=(sD/mean)*100)
+                  View(dfMelted)
+                  View(datMeltedQC)
                   
                   g1 <- ggplot(dfMelted, mapping = aes(x=AcqTime, y=value, color=SampleType, ymin=0)) +
-                    geom_point(size=1) +
+                    geom_point(size=1.3) +
                     facet_grid(variable~., scales="free") +
-                    theme(axis.text.x=element_blank())
+                    theme(axis.text.x=element_blank()) +
+                    geom_hline(data=datMeltedQC, aes(yintercept=mean), size=0.1) +
+                    geom_hline(data=datMeltedQC, aes(yintercept=1.2*mean), size=0.1) +
+                    geom_hline(data=datMeltedQC, aes(yintercept=0.8*mean), size=0.1) +
+                    geom_hline(data=datMeltedQC, aes(yintercept=1.35*mean), size=0.1) +
+                    geom_hline(data=datMeltedQC, aes(yintercept=0.65*mean), size=0.1)
                   
                   ggplotly(g1)
                 })
@@ -294,8 +307,8 @@ server <- shinyServer(function(input, output, session) {
                   }
                   data2$sumArea <- rowSums(select(data2, -c(SampleFileName,SampleType)))
                   g2 <- ggplot(data2, aes(SampleFileName, sumArea, color=SampleType)) +
-                    geom_point(size=1) +
-                    ylab("Total IM Count") +
+                    geom_point(size=3) +
+                    ylab("Total ion Count") +
                     theme(axis.text.x=element_blank())
                   ggplotly(g2)
                 })
