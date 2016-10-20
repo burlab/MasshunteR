@@ -282,7 +282,6 @@ server <- shinyServer(function(input, output, session) {
                   } else if(input$QCorSampleFWHM=="Sample"){
                     data1 <- data1[data1$SampleType=="Sample",]
                   }
-                  View(data1)
                   g <- ggplot(data1, aes(AcqTime, FWHM, color=SampleType, ymin=0)) +
                     geom_point(size=1.3) +
                     theme(axis.text.x=element_blank())
