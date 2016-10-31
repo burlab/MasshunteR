@@ -307,17 +307,17 @@ server <- shinyServer(function(input, output, session) {
                   
                   dfMelted <<- melt(data1 %>% select(AcqTime, Area, NormArea), id="AcqTime")
                   dfMelted <<- dfMelted %>% left_join(data1 %>% select(AcqTime, SampleType))
-                  dfMelted <<- dfMelted %>% group_by(variable) %>% mutate(mean=mean(value), sD=sd(value), CV20Percent=(sD/mean)*100)
+                  dfMelted <<- dfMelted %>% group_by(variable) %>% mutate(mean=mean(value), sD=sd(value))
                   
                   g1 <- ggplot(dfMelted, mapping = aes(x=AcqTime, y=value, color=SampleType, ymin=0)) +
                     geom_point(size=1.3) +
                     facet_grid(variable~., scales="free") +
                     theme(axis.text.x=element_blank()) +
                     geom_hline(data=datMeltedQC, aes(yintercept=mean), size=0.1) +
-                    geom_hline(data=datMeltedQC, aes(yintercept=1.2*mean), size=0.1, linetype = 2) +
-                    geom_hline(data=datMeltedQC, aes(yintercept=0.8*mean), size=0.1, linetype = 2) +
-                    geom_hline(data=datMeltedQC, aes(yintercept=1.35*mean), size=0.1, linetype = 3) +
-                    geom_hline(data=datMeltedQC, aes(yintercept=0.65*mean), size=0.1, linetype = 3)
+                    geom_hline(data=datMeltedQC, aes(yintercept=mean+sD), size=0.1, linetype = 2) +
+                    geom_hline(data=datMeltedQC, aes(yintercept=mean-sD), size=0.1, linetype = 2) +
+                    geom_hline(data=datMeltedQC, aes(yintercept=mean+2*sD), size=0.1, linetype = 3) +
+                    geom_hline(data=datMeltedQC, aes(yintercept=mean-2*sD), size=0.1, linetype = 3)
                   
                   ggplotly(g1)
                 })
