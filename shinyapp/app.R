@@ -313,10 +313,10 @@ server <- shinyServer(function(input, output, session) {
                     facet_grid(variable~., scales="free") +
                     theme(axis.text.x=element_blank()) +
                     geom_hline(data=datMeltedQC, aes(yintercept=mean), size=0.1) +
-                    geom_hline(data=datMeltedQC, aes(yintercept=mean+sD), size=0.1, linetype = 2) +
-                    geom_hline(data=datMeltedQC, aes(yintercept=mean-sD), size=0.1, linetype = 2) +
-                    geom_hline(data=datMeltedQC, aes(yintercept=mean+2*sD), size=0.1, linetype = 3) +
-                    geom_hline(data=datMeltedQC, aes(yintercept=mean-2*sD), size=0.1, linetype = 3)
+                    geom_hline(data=datMeltedQC, aes(yintercept=1.1*mean), size=0.1, linetype = 2) +
+                    geom_hline(data=datMeltedQC, aes(yintercept=0.9*mean), size=0.1, linetype = 2) +
+                    geom_hline(data=datMeltedQC, aes(yintercept=1.175*mean), size=0.1, linetype = 3) +
+                    geom_hline(data=datMeltedQC, aes(yintercept=0.825*mean), size=0.1, linetype = 3)
                   
                   ggplotly(g1)
                 })
