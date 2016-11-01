@@ -22,6 +22,9 @@ SAMPLE_VOL = 5 # uL
 expGrp = c("ParameterA", "ParameterB", "ParameterC")
 filterParameterA = c("ACTH") #Vector include any value
 #
+# Colourblind friendly palette for the plots
+cbPalette <- c("#000000", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+#
 ####################################################################################################################
 
 library(reshape)
@@ -33,7 +36,6 @@ library(dplyr)
 library(dtplyr)
 library(ggplot2)
 library(data.table)
-library(RColorBrewer)
 library(DT)
 
 # Define UI for application that draws a histogram
@@ -85,20 +87,12 @@ ui <- shinyUI(fluidPage(
    )
 ))
 
-# Define server logic required to draw a histogram
 server <- shinyServer(function(input, output, session) {
   session$onSessionEnded(stopApp)
    observeEvent(input$Submit,
                 {
-                  output$Status <- renderText({"processing"})
-                  #output$Status <- renderText("Processing")
-                print("Processing")
-                #datWide <- read.csv("20160615_Pred_ACTH_Original_Data.csv", header = FALSE, sep = ",", na.strings=c("#N/A", "NULL"), check.names=FALSE, as.is=TRUE, strip.white=TRUE )
-                #mapISTD <- read.csv("CompoundISTDList_SLING-PL-Panel_V1.csv", header = TRUE, sep = ",", check.names=TRUE, as.is=TRUE, strip.white = TRUE)
-                #ISTDDetails <- read.xlsx("ISTD-map-conc_SLING-PL-Panel_V1.xlsx", sheetIndex = 2)
                 datWide <- read.csv(input$mainInput$datapath, header=FALSE, sep=",", na.strings=c("#N/A", "NULL"), check.names=FALSE, as.is=TRUE, strip.white=TRUE)
                 mapISTD <- read.csv(input$ISTDMapping$datapath, header = TRUE, sep = ",", check.names=TRUE, as.is=TRUE, strip.white = TRUE)  
-                #ISTDDetails <- read.xlsx(input$ISTDConc$datapath, sheetIndex = 2)
                 ISTDDetails <- read.csv(input$ISTDConc$datapath)
                 ISTDDetails$ISTD <- trimws(ISTDDetails$ISTD)
                 
@@ -214,6 +208,7 @@ server <- shinyServer(function(input, output, session) {
                   facet_wrap(~Compound, scales="free") +
                   xlab("AcqTime") +
                   ylab("Peak Areas") +
+                  scale_colour_manual(values=cbPalette) +
                   theme(axis.text.x=element_blank())# +
                   #ggsave("QCplot.png",width=30,height=30) 
                 output$DownloadQC <- downloadHandler(
@@ -235,6 +230,7 @@ server <- shinyServer(function(input, output, session) {
                   geom_line(size=1) +
                   #scale_y_log10() +
                   facet_wrap(~Compound, scales="free") +
+                  scale_colour_manual(values=cbPalette) +
                   xlab("AcqTime") +
                   ylab("Peak Areas") +
                   theme(axis.text.x=element_blank()) #+
@@ -284,6 +280,7 @@ server <- shinyServer(function(input, output, session) {
                   }
                   g <- ggplot(data1, aes(AcqTime, FWHM, color=SampleType, ymin=0)) +
                     geom_point(size=1.3) +
+                    scale_colour_manual(values=cbPalette) +
                     theme(axis.text.x=element_blank())
                   ggplotly(g)
                 })
@@ -310,6 +307,7 @@ server <- shinyServer(function(input, output, session) {
                   
                   g1 <- ggplot(dfMelted, mapping = aes(x=AcqTime, y=value, color=SampleType, ymin=0)) +
                     geom_point(size=1.3) +
+                    scale_colour_manual(values=cbPalette) +
                     facet_grid(variable~., scales="free") +
                     theme(axis.text.x=element_blank()) +
                     geom_hline(data=datMeltedQC, aes(yintercept=mean), size=0.1) +
@@ -336,6 +334,7 @@ server <- shinyServer(function(input, output, session) {
                   g2 <- ggplot(data2, aes(SampleFileName, sumArea, color=SampleType)) +
                     geom_point(size=2) +
                     ylab("Total ion Count") +
+                    scale_colour_manual(values=cbPalette) +
                     theme(axis.text.x=element_blank())
                   ggplotly(g2)
                 })
